@@ -1,4 +1,5 @@
 [deps]
 CondaPkg = "992eb4ea-22a4-4c89-a5bb-47a3300528ab"
 NPZ = "15e1cf62-19b3-5cfa-8e77-841668bca605"
+NewtonRaphson = "27761fb6-0d9c-4056-9965-e360c114f216"
 PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"

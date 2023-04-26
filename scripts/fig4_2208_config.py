@@ -35,11 +35,12 @@ lant = lant6_saval(
     offset0 = offset0,
     z_ex = mesh.zw, final_scale=scale
 )
-
+t = 2 * np.pi / 5
+core_locs = np.array([[0.0,0.0]] + [[offset0 * scale * np.cos(i*t), offset0 * scale * np.sin(i*t)] for i in range(5)])
 lant.set_sampling(mesh.xy)
 prop = Prop3D(wl0 = 1.0, mesh = mesh, optical_system = lant, n0 = nclad)
 
-pupil_grid = make_pupil_grid(mesh.xy.shape, max(mesh.yg[0]) / rclad)
+pupil_grid = make_pupil_grid(mesh.xy.shape, 1)
 focal_grid = make_focal_grid(8, 10, reference_wavelength=1e-6*prop.wl0, f_number=17) 
 s = focal_grid.shape[0]
 # shaneAO f number
@@ -47,26 +48,24 @@ fprop = FraunhoferPropagator(pupil_grid, focal_grid)
 # lant.show_cross_section(mesh.zw)
 
 # %%
-def save_for_zampl(zern, ampl):
+def save_for_zampl(zern, ampl, save=True):
     phase = zernike_ansi(zern)(pupil_grid)
     aberration = np.exp(1j * ampl * phase)
     wf = Wavefront(aberration, wavelength=prop.wl0)
     u_in = np.array(normalize(fprop(wf).electric_field))
     u_in = u_in.reshape((s,s))
     u = prop.prop2end_uniform(u_in)
-    # np.save(f"data/2208_4_{zern}_{ampl}.npy", u)
+    if save:
+        np.save(f"data/2208_4_{zern}_{ampl}.npy", u)
     return u
 
 # %%
-u_out = save_for_zampl(4, -0.3) # vary 2-6 and -1.0 to 1.0
-# %%
-output_powers = []
-t = 2 * np.pi / 5
-w = mesh.xy.get_weights()
-core_locs = np.array([[0.0,0.0]] + [[offset0 * scale * np.cos(i*t), offset0 * scale * np.sin(i*t)] for i in range(5)])
-for pos in core_locs:
-    _m = norm_nonu(lpfield(mesh.xg-pos[0],mesh.yg-pos[1],0,1,rcore*scale,prop.wl0,ncore,nclad),w)
-    output_powers.append(np.power(overlap_nonu(_m,u_out,w),2))
+if __name__ == "__main__":
+    u_out = save_for_zampl(4, -0.3) # vary 2-6 and -1.0 to 1.0
+    output_powers = []
+    w = mesh.xy.get_weights()
+    for pos in core_locs:
+        _m = norm_nonu(lpfield(mesh.xg-pos[0],mesh.yg-pos[1],0,1,rcore*scale,prop.wl0,ncore,nclad),w)
+        output_powers.append(np.power(overlap_nonu(_m,u_out,w),2))
 
-print(output_powers)
-# %%
+    print(output_powers)

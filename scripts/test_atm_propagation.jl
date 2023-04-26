@@ -15,5 +15,4 @@ function is_unitary(M)
     M * M' ≈ I && M' * M ≈ I
 end
 
-atm_screens = npzread("data/input_fields_from_test_atm.npy");
-imshow
+U = make_unitary_matrix(6)
