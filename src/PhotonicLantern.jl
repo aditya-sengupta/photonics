@@ -4,6 +4,7 @@ module PhotonicLantern
     ENV["JULIA_CONDAPKG_BACKEND"] = :Null
     ENV["JULIA_PYTHONCALL_EXE"] = "./.venv/bin/python"
     using PythonCall
+    using LinearAlgebra: I
     # lightbeam = pyimport("lightbeam")
 
     """
@@ -45,5 +46,14 @@ module PhotonicLantern
         end
     end
 
-    export interaction_matrices, quadratic_forward, quadratic_jacobian, lpfield
+    function make_unitary_matrix(N)
+        H = 2 .* rand(ComplexF64, N, N) .- (1 + 1im)
+        exp(1im * (H + H'))
+    end
+    
+    function is_unitary(M)
+        M * M' ≈ I && M' * M ≈ I
+    end
+
+    export interaction_matrices, quadratic_forward, quadratic_jacobian, lpfield, make_unitary_matrix, is_unitary
 end # module PhotonicLantern

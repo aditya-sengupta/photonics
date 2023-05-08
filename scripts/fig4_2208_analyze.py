@@ -2,6 +2,7 @@
 from fig4_2208_config import *
 from lightbeam.misc import norm_nonu, overlap_nonu
 from tqdm import tqdm
+from os.path import join
 import re
 # %%
 if __name__ == "__main__":
@@ -9,35 +10,34 @@ if __name__ == "__main__":
     core_locs = [[0.0,0.0]] + [[2 * np.cos(i*t), 2 * np.sin(i*t)] for i in range(5)]
     w = mesh.xy.get_weights()
     # %%
-    u = np.load("data/2208_4_2_-0.7.npy")
+    u = np.load(join(ROOT_DIR, "data/zerns/2208_4_2_-0.6.npy"))
     output_powers = []
     for pos in core_locs:
-        _m = norm_nonu(LPmodes.lpfield(mesh.xg-pos[0],mesh.yg-pos[1],0,1,rcore*taper_factor,wl,ncore,nclad),w)
+        _m = norm_nonu(lpfield(mesh.xg-pos[0],mesh.yg-pos[1],0,1,rcore*scale,wl0,ncore,nclad),w)
         output_powers.append(np.power(overlap_nonu(_m,u,w),2))
     # %%
-    powers = np.empty((5,21,6)) # input zernikes x amplitudes x ports
-    ampls = np.empty((5,21)) # input zernikes x amplitudes
+    powers = np.empty((5,11,6)) # input zernikes x amplitudes x ports
+    ampls = np.empty((5,11)) # input zernikes x amplitudes
     input_zerns = [2, 3, 4, 5, 6]
-    files = os.listdir("data/zerns")
+    files = os.listdir(join(ROOT_DIR, "data/zerns"))
     for z in input_zerns:
         zfiles = list(filter(lambda x: x.startswith(f"2208_4_{z}"), files))
-        assert len(zfiles) == 21
 
     for z in input_zerns:
         zfiles = list(filter(lambda x: x.startswith(f"2208_4_{z}"), files))
-        for (j, f) in tqdm(enumerate(zfiles)):
+        for (j, f) in enumerate(tqdm(zfiles)):
             ampl = float(re.match(fr"2208_4_{z}_(\S+).npy", f).group(1))
             ampls[z-2][j] = ampl
-            u = np.load(f"data/{f}")
+            u = np.load(join(ROOT_DIR, f"data/zerns/{f}"))
             for (i, pos) in enumerate(core_locs):
-                _m = norm_nonu(LPmodes.lpfield(mesh.xg-pos[0],mesh.yg-pos[1],0,1,rcore*taper_factor,wl,ncore,nclad),w)
+                _m = norm_nonu(lpfield(mesh.xg-pos[0],mesh.yg-pos[1],0,1,rcore*scale,wl0,ncore,nclad),w)
                 powers[z-2][j][i] = np.power(overlap_nonu(_m,u,w),2)
     # %%
-    np.save("data/2208_4_ampls.npy", ampls)
-    np.save("data/2208_4_powers", powers)
+    np.save(join(ROOT_DIR, "data/zerns/2208_4_ampls.npy"), ampls)
+    np.save(join(ROOT_DIR, "data/zerns/2208_4_powers.npy"), powers)
     # %%
-    ampls = np.load("data/2208_4_ampls.npy")
-    powers = np.load("data/2208_4_powers.npy")
+    ampls = np.load(join(ROOT_DIR, "data/zerns/2208_4_ampls.npy"))
+    powers = np.load(join(ROOT_DIR, "data/zerns/2208_4_powers.npy"))
     powers = np.nan_to_num(powers, 0)
     colors = ['r', 'g', 'b', 'k', 'c', 'm']
     fig, axs = plt.subplots(5,1, figsize=(2,10), sharex=True)
@@ -51,5 +51,5 @@ if __name__ == "__main__":
     plt.legend(bbox_to_anchor=(1.1, 1.05))
     plt.xlabel("Input amplitude")
     plt.ylabel("Output response")
-    plt.savefig("figures/2208_4_repr.pdf", bbox_inches='tight')
+    plt.savefig(join(ROOT_DIR, "figures/2208_4_repr.pdf"), bbox_inches='tight')
     # %%

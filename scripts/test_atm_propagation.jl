@@ -1,22 +1,13 @@
 using NPZ
 using LinearAlgebra, Distributions
 using Chain
-using Makie
+using Plots
 using NewtonRaphson
 using PhotonicLantern
 using Zygote
 
 P = real.(npzread("data/lp_basis.npy"))
 N = sqrt(size(P, 2)) |> Int64
-
-function make_unitary_matrix(N)
-    H = rand(ComplexF64, N, N)
-    exp(1im * (H + H'))
-end
-
-function is_unitary(M)
-    M * M' ≈ I && M' * M ≈ I
-end
 
 begin
     Nmodes = 6
