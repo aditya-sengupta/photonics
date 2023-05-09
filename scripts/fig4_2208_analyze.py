@@ -13,12 +13,12 @@ if __name__ == "__main__":
     u = np.load(join(ROOT_DIR, "data/zerns/2208_4_2_-0.6.npy"))
     output_powers = []
     for pos in core_locs:
-        _m = norm_nonu(lpfield(mesh.xg-pos[0],mesh.yg-pos[1],0,1,rcore*scale,wl0,ncore,nclad),w)
+        _m = norm_nonu(lpfield(mesh.xg-pos[0],mesh.yg-pos[1],0,1,rcore*scale,prop.wl0,ncore,nclad),w)
         output_powers.append(np.power(overlap_nonu(_m,u,w),2))
     # %%
     powers = np.empty((5,11,6)) # input zernikes x amplitudes x ports
     ampls = np.empty((5,11)) # input zernikes x amplitudes
-    input_zerns = [2, 3, 4, 5, 6]
+    input_zerns = list(range(1,6))
     files = os.listdir(join(ROOT_DIR, "data/zerns"))
     for z in input_zerns:
         zfiles = list(filter(lambda x: x.startswith(f"2208_4_{z}"), files))
@@ -27,11 +27,11 @@ if __name__ == "__main__":
         zfiles = list(filter(lambda x: x.startswith(f"2208_4_{z}"), files))
         for (j, f) in enumerate(tqdm(zfiles)):
             ampl = float(re.match(fr"2208_4_{z}_(\S+).npy", f).group(1))
-            ampls[z-2][j] = ampl
+            ampls[z-1][j] = ampl
             u = np.load(join(ROOT_DIR, f"data/zerns/{f}"))
             for (i, pos) in enumerate(core_locs):
-                _m = norm_nonu(lpfield(mesh.xg-pos[0],mesh.yg-pos[1],0,1,rcore*scale,wl0,ncore,nclad),w)
-                powers[z-2][j][i] = np.power(overlap_nonu(_m,u,w),2)
+                _m = norm_nonu(lpfield(mesh.xg-pos[0],mesh.yg-pos[1],0,1,rcore*scale,prop.wl0,ncore,nclad),w)
+                powers[z-1][j][i] = np.power(overlap_nonu(_m,u,w),2)
     # %%
     np.save(join(ROOT_DIR, "data/zerns/2208_4_ampls.npy"), ampls)
     np.save(join(ROOT_DIR, "data/zerns/2208_4_powers.npy"), powers)
@@ -44,9 +44,10 @@ if __name__ == "__main__":
     plt.subplots_adjust(hspace=0.4)
     for j in range(5):
         perm = np.argsort(ampls[j])
+        print(powers[j,:,:][perm])
         for i in range(6):
             axs[j].plot(ampls[j][perm], powers[j,:,i][perm], colors[i], label=f"Port {i}")
-        axs[j].set_title(f"Zernike mode {j+2}")
+        axs[j].set_title(f"Zernike mode {j+1}")
             
     plt.legend(bbox_to_anchor=(1.1, 1.05))
     plt.xlabel("Input amplitude")
