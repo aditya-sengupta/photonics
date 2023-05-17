@@ -2,6 +2,7 @@ using NPZ
 using BenchmarkTools
 using Base.Threads
 using LoopVectorization
+using PythonCall
 
 a, b, c, g, r, u = [npzread("data/trimats_$x.npy") for x in ['a', 'b', 'c', 'g', 'r', 'u']]
 

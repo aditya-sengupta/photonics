@@ -2,34 +2,38 @@
 import os, subprocess, sys
 import numpy as np
 from matplotlib import pyplot as plt
+from astropy import units as u
+
+from itertools import product
 
 from hcipy import *
 from hcipy.mode_basis import zernike_ansi
-from itertools import product
+
 from lightbeam.LPmodes import lpfield
 from lightbeam.optics import make_lant6_saval, make_lant3big
 from lightbeam.mesh import RectMesh3D
 from lightbeam.prop import Prop3D
-from lightbeam.misc import normalize, norm_nonu, overlap_nonu
+from lightbeam.misc import normalize, norm_nonu, overlap_nonu, chain, chain_apply, lmc
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 if ROOT_DIR.endswith("scripts"):
     ROOT_DIR = os.path.dirname(ROOT_DIR)
 # %%
-wl = 1.55
-ds = 1/4
+D = 3.0 # m
+wl = 1.55 # um
+ds = 1/2
 nclad = 1.444
 ncore = nclad + 0.0088
 njack = nclad - 5.5e-3
 rclad = 10
 scale = 8
-rcore = 2.2 / scale
+rcore = 2.2 / scale 
 offset0 = rclad * 2/3
 PML = int(4 / ds)
 
 mesh = RectMesh3D(
-    xw = 64,
-    yw = 64,
+    xw = 256,
+    yw = 256,
     zw = 10000,
     ds = ds,
     dz = 10,
@@ -38,13 +42,14 @@ mesh = RectMesh3D(
 
 lant = make_lant6_saval(offset0, rcore, rclad, 0, mesh.zw, (ncore, nclad, njack), final_scale=scale)
 
+# %%
 lant.set_sampling(mesh.xy)
 prop = Prop3D(wl0 = wl, mesh = mesh, optical_system = lant, n0 = nclad)
 
 xg, yg = np.meshgrid(mesh.xy.xa[PML:-PML], mesh.xy.ya[PML:-PML], indexing='ij')
 s = rclad / (xg[1,0] - xg[0,0]) + 1/2
-pupil_grid = make_pupil_grid(mesh.xy.shape, 1)
-focal_grid = make_focal_grid(11, s / 11)
+pupil_grid = make_pupil_grid(mesh.xy.shape, D)
+focal_grid = make_focal_grid(11, s / 11, spatial_resolution=(wl * 1e-6 / D))
 # shaneAO f number
 fprop = FraunhoferPropagator(pupil_grid, focal_grid)
 w = mesh.xy.get_weights()
@@ -63,8 +68,8 @@ def save_for_zampl(zern, ampl, save=True):
         np.save(os.path.join(ROOT_DIR, f"data/zerns/2208_4_{zern}_{ampl}.npy"), u)
     return u
 
-assert lant.check_smfs(2 * np.pi)
-assert lant.check_mode_support(2 * np.pi)
+assert lant.check_smfs(2 * np.pi / wl)
+assert lant.check_mode_support(2 * np.pi / wl)
 
 # %%
 def plot_zernike_prop(zern, ampl):
@@ -79,8 +84,8 @@ def plot_zernike_prop(zern, ampl):
     for ax in axs:
         ax.set_xticks([])
         ax.set_yticks([])
-    axs[0].imshow(np.abs(u_in))
-    axs[0].set_title(f"Zernike {zern} input intensity")
+    axs[0].imshow(np.array(phase.shaped))
+    axs[0].set_title(f"Zernike {zern} input phase")
     axs[1].imshow(np.abs(u_out))
     axs[1].set_title("Zernike lantern output")
 
@@ -98,21 +103,18 @@ def plot_lp_prop(l, m):
     axs[1].set_title("LP lantern output")
 
 # %%
-plot_zernike_prop(5, 1.0)
-
-# %%
-plot_lp_prop(3, 2)
-# %%
-u_outz = save_for_zampl(1, 1.0) # vary 1-5 and -1.0 to 1.0
-output_powers = []
-for pos in lant.final_core_locs:
-    _m = norm_nonu(lpfield(mesh.xg-pos[0],mesh.yg-pos[1],0,1,rcore*scale,prop.wl0,ncore,nclad),w)
-    output_powers.append(np.power(overlap_nonu(_m,u_outz,w),2))
-
-print(output_powers)
-
-# %%
 if __name__ == "__main__":
+    plot_zernike_prop(5, 1.0)
+    # %%
+    plot_lp_prop(3, 2)
+    # %%
+    u_outz = save_for_zampl(1, 1.0) # vary 1-5 and -1.0 to 1.0
+    output_powers = []
+    for pos in lant.final_core_locs:
+        _m = norm_nonu(lpfield(mesh.xg-pos[0],mesh.yg-pos[1],0,1,rcore*scale,prop.wl0,ncore,nclad),w)
+        output_powers.append(np.power(overlap_nonu(_m,u_outz,w),2))
+
+    print(output_powers)
     if 'darwin' in sys.platform:
         print('Running \'caffeinate\' on MacOSX to prevent the system from sleeping')
         subprocess.Popen('caffeinate')

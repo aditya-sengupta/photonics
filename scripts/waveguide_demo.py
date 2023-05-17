@@ -7,7 +7,7 @@ from meep.materials import SiO2
 
 cell = mp.Vector3(30,7,0)
 
-geometry = [mp.Block(mp.Vector3(4,.5,mp.inf),
+geometry = [mp.Block(mp.Vector3(4,0.5,mp.inf),
                      center=mp.Vector3(-13,0,0),
                      material=mp.Medium(epsilon=3.2)),
             mp.Block(mp.Vector3(28,4,mp.inf),
@@ -23,14 +23,28 @@ kpoint = mp.Vector3(x=1).rotate(mp.Vector3(z=1), rot_angle)
 bnum = 1
 w = .5
 
-sources = [mp.EigenModeSource(src=mp.ContinuousSource(wavelength=1.1),
-                                  center=mp.Vector3(-14,0),
-                                  size=mp.Vector3(y=3*w),
-                                  direction=mp.NO_DIRECTION,
-                                  eig_kpoint=kpoint,
-                                  eig_band=bnum,
-                                  eig_parity=mp.EVEN_Y+mp.ODD_Z if rot_angle == 0 else mp.ODD_Z,
-                                  eig_match_freq=True)]
+sources = [
+    mp.EigenModeSource(
+        src=mp.ContinuousSource(wavelength=1.1),
+        center=mp.Vector3(-14,0),
+        size=mp.Vector3(y=3*w),
+        direction=mp.NO_DIRECTION,
+        eig_kpoint=kpoint,
+        eig_band=bnum,
+        eig_parity=mp.EVEN_Y+mp.ODD_Z if rot_angle == 0 else mp.ODD_Z,
+        eig_match_freq=True
+    ),
+    mp.EigenModeSource(
+        src=mp.ContinuousSource(wavelength=1.1),
+        center=mp.Vector3(17,0),
+        size=mp.Vector3(y=3*w),
+        direction=mp.NO_DIRECTION,
+        eig_kpoint=kpoint,
+        eig_band=bnum,
+        eig_parity=mp.EVEN_Y+mp.ODD_Z if rot_angle == 0 else mp.ODD_Z,
+        eig_match_freq=True
+    )
+]
 
 
 # define PML
