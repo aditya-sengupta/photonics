@@ -14,9 +14,13 @@ if __name__ == "__main__":
     img = reader.read_image("first_lantern_test")
     reader.set_centroids(img)
     intensities = reader.get_intensities(img)
-    plt.imshow(img)
+    plt.imshow(img, cmap='magma')
     plt.show()
-    plt.imshow(reader.reconstruct_image(img, intensities))
+    plt.imshow(reader.reconstruct_image(img, intensities), cmap='magma')
     plt.show()
+
+# %%
+plt.scatter(reader.xc, reader.yc)
+plt.plot(reader.xc, reader.yc)
 
 # %%

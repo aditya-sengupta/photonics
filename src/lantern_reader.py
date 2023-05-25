@@ -5,6 +5,12 @@ from astropy.stats import sigma_clipped_stats
 from matplotlib import pyplot as plt
 from os import path
 from photutils.detection import DAOStarFinder
+from scipy.spatial import ConvexHull
+
+def angles_relative_to_center(x, y):
+    xc, yc = np.mean(x), np.mean(y)
+    xd, yd = x - xc, y - yc
+    return (np.arctan2(yd, xd) + np.pi / 2) % (2 * np.pi)
 
 class LanternReader:
     def __init__(self, nports, fwhm, ext, imgshape):
@@ -28,8 +34,24 @@ class LanternReader:
         self.xc, self.yc = self.ports_in_radial_order(xc, yc)
 
     def ports_in_radial_order(self, xc, yc):
-        # sort everything in radial order
-        return xc, yc
+        points = np.vstack((xc, yc)).T
+        xnew, ynew = np.zeros_like(xc), np.zeros_like(yc)
+        prev_idx = 0
+        while len(points) > 0: # should run three times for a 19-port lantern
+            if len(points) == 1:
+                v = np.array([0])
+            else:
+                hull = ConvexHull(points)
+                v = hull.vertices
+            nhull = len(v)
+            xtemp, ytemp = points[v][:,0], points[v][:,1]
+            sortperm = np.argsort(angles_relative_to_center(xtemp, ytemp))[::-1]
+            xnew[prev_idx:prev_idx+nhull] = xtemp[sortperm]
+            ynew[prev_idx:prev_idx+nhull] = ytemp[sortperm]
+            prev_idx += nhull
+            points = np.delete(points, v, axis=0)
+
+        return np.flip(xnew), np.flip(ynew)
 
     def get_intensities(self, img):
         mask = np.zeros_like(img)
