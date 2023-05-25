@@ -20,23 +20,25 @@ if ROOT_DIR.endswith("scripts"):
     ROOT_DIR = os.path.dirname(ROOT_DIR)
 # %%
 D = 3.0 # m
-wl = 1.55 # um
-ds = 1/2
+F = 51.0 # m
+wl = 1.55e-6
+spatial_resolution = wl * F / D
+ds = 0.5e-6
 nclad = 1.444
 ncore = nclad + 0.0088
 njack = nclad - 5.5e-3
-rclad = 10
+rclad = 10e-6
 scale = 8
-rcore = 2.2 / scale 
+rcore = 2.3e-6 / scale 
 offset0 = rclad * 2/3
-PML = int(4 / ds)
+PML = int(4e-6 / ds)
 
 mesh = RectMesh3D(
-    xw = 256,
-    yw = 256,
-    zw = 10000,
+    xw = 256e-6,
+    yw = 256e-6,
+    zw = 10000e-6,
     ds = ds,
-    dz = 10,
+    dz = 10e-6,
     PML = PML
 )
 
@@ -47,9 +49,10 @@ lant.set_sampling(mesh.xy)
 prop = Prop3D(wl0 = wl, mesh = mesh, optical_system = lant, n0 = nclad)
 
 xg, yg = np.meshgrid(mesh.xy.xa[PML:-PML], mesh.xy.ya[PML:-PML], indexing='ij')
-s = rclad / (xg[1,0] - xg[0,0]) + 1/2
+s = int(rclad / (xg[1,0] - xg[0,0])) + 1/2
 pupil_grid = make_pupil_grid(mesh.xy.shape, D)
-focal_grid = make_focal_grid(11, s / 11, spatial_resolution=(wl * 1e-6 / D))
+num_airy = mesh.xw / 4 / spatial_resolution
+focal_grid = make_focal_grid(len(xg) / (4 * num_airy), num_airy, spatial_resolution=spatial_resolution)
 # shaneAO f number
 fprop = FraunhoferPropagator(pupil_grid, focal_grid)
 w = mesh.xy.get_weights()
@@ -84,8 +87,8 @@ def plot_zernike_prop(zern, ampl):
     for ax in axs:
         ax.set_xticks([])
         ax.set_yticks([])
-    axs[0].imshow(np.array(phase.shaped))
-    axs[0].set_title(f"Zernike {zern} input phase")
+    axs[0].imshow(np.abs(u_in))
+    axs[0].set_title(f"Zernike {zern} input intensity")
     axs[1].imshow(np.abs(u_out))
     axs[1].set_title("Zernike lantern output")
 
@@ -104,7 +107,7 @@ def plot_lp_prop(l, m):
 
 # %%
 if __name__ == "__main__":
-    plot_zernike_prop(5, 1.0)
+    plot_zernike_prop(3, 1.0)
     # %%
     plot_lp_prop(3, 2)
     # %%
