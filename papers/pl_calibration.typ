@@ -87,7 +87,27 @@ The figure below shows the combinations of basis elements we'll need to produce 
 
 = Choosing bases
 
-So far, we've worked with the assumption that we're able to work in a basis of focal-plane electric field distributions that covers all the aberrations we might be interested in. However, choosing such a basis isn't too easy. The natural basis for a photonic lantern is the LP modes; patterns that describe different solutions to the propagation equation given how large the multi-mode fiber core is relative to the wavelength of light being considered. Unfortunately, it's not too easy to create LP modes at the pupil plane. (fill in the rest tomorrow)
+So far, we've worked with the assumption that we're able to work in a basis of focal-plane electric field distributions that covers all the aberrations we might be interested in. However, choosing such a basis isn't too easy. The natural basis for a photonic lantern is the LP modes; patterns that describe different solutions to the propagation equation given how large the multi-mode fiber core is relative to the wavelength of light being considered. Unfortunately, it's not too easy to create LP modes at the pupil plane.
+
+LP modes are patterns of light that couple into the fiber, and high-order modes don't always correlate with high-order pupil-plane phase aberrations, so they don't always respond to Zernike modes in a way that's easy for us to track. If we try to back-propagate the LP modes to the pupil plane and phase-unwrap them for visual coherence, we get patterns that look like this:
+
+#figure(image("../figures/lp_pupils.png", width: 100%))
+
+Note that in order to do this back-propagation, it's necessary to take complex LP modes. The LP modes are usually shown as being real and having odd ($sin$) or even ($cos$) angular dependence, but back-propagating the real-valued versions doesn't return anything coherent. It's necessary to take the usual complex combination of these: $"LP"_cos + i "LP"_sin$.
+
+Many of the LP mode phase screens are likely to be hard to produce with DMs and may need the SLM. Another disadvantage of LP modes is we only know that they're completely accurate if we know the lantern parameters accurately: specifically, we need the input fiber radius and the refractive indices of the core and cladding. We also need to be relatively certain that the diameter of the input beam matches the fiber's diameter well.
+
+Given these drawbacks, it's hard to see why LP modes are a good practical choice. The main reasons are that they're more strongly tied to the physics of the photonic lantern, so we can qualitatively understand their behaviour more easily. Further, they form a vector space, so we can take linear combinations and rely on linearly dependent (and squared) outputs. This makes them easy to use for the identification procedure laid out above.
+
+But it'd be nice if we could get at least the second property from a basis we're more familiar with. If we propagated the Zernike polynomials to the focal plane, we'd get a set of linearly independent electric fields we could work with. Unfortunately, we don't immediately have a vector space, because the mapping from Zernike phases to electric fields is nonlinear. 
+
+For example, $x$-tilt and $y$-tilt are overall shapes in the pupil plane that cause the PSF to move in the focal plane in the $x$ and $y$ direction respectiely. If we added the resulting electric fields together, we wouldn't get the combined effect of putting on those amounts of $x$- and $y$-tilt in the pupil plane, i.e. a PSF at $(x, y)$; instead, we'd get two separate PSFs, at $(x, 0)$ and $(0, y)$, which would be hard to produce at the pupil plane where we can only control phase.
+
+However, we can work around this by applying small aberrations, where the mapping is almost linear. In this example, if we applied sufficiently large tilt levels that a change was detectable but sufficiently small levels so as not to separate where the two PSFs would be, we'd get a single oval-shaped PSF, which can be understood as, e.g. a combination of the initial tilts and some (I think) astigmatism terms -- more within what we can represent with Zernikes. 
+
+For system identification, applying small pupil-plane aberrations should just give us the exact lantern matrix and not an approximation of it. This is because what we care about are linear combinations at the focal plane, and we only have to make the smallness assumption in order to create the pupil-plane patterns needed to make these linear combinations; once we've successfully made them, linear algebra should apply for propagation through the lantern, meaning the small-aberration assumption is no longer significant. Despite this, I'm worried about cross-talk and not exactly producing the electric fields that simulations claim to and that I'll find the linear algebra approach gives me an inconsistent system. But we've got the advantage of not having to worry about the lantern structure in this case.
+
+I don't think either of these choices are perfect, but since we've got a lot of redundant combined queries, we can endlessly cross-check both of them and hopefully find a reasonable-looking solution.
 
 = Incorporating an interaction matrix
 
@@ -116,5 +136,43 @@ so a coarse measurement of the linear range is the point at which the effects of
 $ bold(Delta phi.alt)_(k,"cross") = (2B_(j k)) / (C_(j k)). $
 
 When we cross this range of error in mode $k$ for all ports $j$, the assumption of linearity breaks down because we can't sense the first-order effect without being drowned out by the second-order effect.
+
+= Practical issues
+
+== The order of lantern ports
+
+It's possible that the exact positions of the single-mode fiber ports move on the detector over time, with installation changes, etc, so we can't uniquely refer to the ports with their $(x, y)$ coordinates. Instead, I'm adopting a specific convention for port numbering:
+
+1. Ports are numbered from the inside out; the central port is 1, the ports on the circle surrounding the central port are 2 through $k$ (in our case, 7), and so on.
+2. Ports within a circle are ordered starting from the lowest one and moving around counterclockwise (in the $+theta$ direction.)
+
+This matches @Lin2022's convention in Figure 3. To find the correct port ordering on a set of $(x, y)$ centroid locations, do the following:
+
+1. Repeatedly take convex hulls of the set of points (e.g. with _scipy.spatial.ConvexHull_) until only the central port remains, to get sub-arrays consisting of each concentric circle from the outside in.
+2. Sort the sub-arrays according to the _arctan2_ value of the sub-arrays minus their mean, plus $pi/2$ modulo $2pi$.
+3. Concatenate the sub-arrays in reverse order, so the central port is first and the circles are stacked from the inside out.
+
+It'll probably never be necessary for anyone to write this functionality again, but I had fun coming up with this algorithm!
+
+#figure(image("../figures/lantern_order.png", width: 100%))
+
+== Centroiding and taking port intensity values
+
+Centroid-finding should be carried out before analyzing each new set of data taken on a different day/after a bench adjustment, in case of any drift. We probably want to create a lantern calibration file format and save an instance of it along with each batch of data. So far I've had reasonable success using _photutils.detection.DAOStarFinder_, but I'm guessing that success is going to be very dependent on the parameters we use, like the camera gain, exposure time, and so on. I'm still looking for a more robust way to do this.
+
+We also need to find radii in pixel space. For _photutils_, this is a parameter we put in. This should be fine under ideal circumstances but I suspect they're not all identically sized in reality, so we may want some better tuning/discovery. 
+
+With both of these, a simple way of finding an intensity value is to take the average of the masked-out port, i.e. aperture photometry. It's more reliable to take an average than a sum, because even when all the radii are the same, differences in the centroids at the sub-pixel level mean not every port will see the same number of pixels in its mask, so summed values may be skewed by this.
+
+A more robust way of finding intensity values is to weight the average by the intensity pattern of the fundamental mode $"LP"_(0 1)$. This is analogous to PSF photometry, and since we can empirically find the SMF port sizes, it's likely to be accurate. 
+
+== SEAL-specific information
+
+- The BlackFly camera we're using is at 128.114.22.1.
+- In order to see lantern output, we need to close the loop on the MEMS DM or on both.
+
+== Saturation
+
+There's a small but nonzero chance that we'll saturate the detector on at least one port on one test, so we should have a check for it in data analysis.
 
 #bibliography("pl.bib", style: "mla")
