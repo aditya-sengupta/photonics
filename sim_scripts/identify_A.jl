@@ -9,8 +9,8 @@ function make_queries(U)
      #true_phase_differences = diff(angle.(U), dims=2)
     # true_phase = zeros(N, N)
     # true_phase[:,2:end] = cumsum(true_phase_differences, dims=2)
-    amplitude_queries = @chain N ones Diagonal eachrow collect
-    amplitude_answers = (x -> abs2.(U * x)).(amplitude_queries)
+    basis_queries = @chain N ones Diagonal eachrow collect
+    basis_answers = (x -> abs2.(U * x)).(basis_queries)
 
     cos_phase_queries = [x + y for (x, y) in zip(amplitude_queries[1:end-1], amplitude_queries[2:end])]
     sum_phase_queries = [x + y for (x, y) in zip(amplitude_queries[1:end-2], amplitude_queries[3:end])]
