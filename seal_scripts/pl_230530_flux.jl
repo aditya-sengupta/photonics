@@ -2,7 +2,7 @@ using Flux, ProgressMeter
 using Statistics
 using NPZ
 using Plots
-import Chain: chain
+import Chain: @chain
 using ZernikePolynomials
 
 zero_one_ify(x) = (x .- minimum(x)) ./ (maximum(x) .- minimum(x)), minimum(x), maximum(x)

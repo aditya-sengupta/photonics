@@ -6,7 +6,8 @@ from math import floor, ceil
 from matplotlib import pyplot as plt
 from os import path
 from photutils.detection import DAOStarFinder
-from scipy.spatial import ConvexHull
+from scipy.spatial import ConvexHull, QhullError
+import warnings
 
 PROJECT_ROOT = path.dirname(path.abspath(__file__))
 if "src" in PROJECT_ROOT or "scripts" in PROJECT_ROOT:
@@ -15,10 +16,10 @@ if "src" in PROJECT_ROOT or "scripts" in PROJECT_ROOT:
 def angles_relative_to_center(x, y):
     xc, yc = np.mean(x), np.mean(y)
     xd, yd = x - xc, y - yc
-    return (np.arctan2(yd, xd) + np.pi / 2) % (2 * np.pi)
+    return (np.arctan2(yd, xd) + 3 * np.pi / 2) % (2 * np.pi)
 
 class LanternReader:
-    def __init__(self, nports, cutout_size, fwhm, ext, imgshape, guess_positions=[], subdir=""):
+    def __init__(self, nports, cutout_size, fwhm, threshold, ext, imgshape, guess_positions=[], subdir=""):
         self.nports = nports
         self.cutout_size = cutout_size
         self.ext = ext
@@ -27,6 +28,7 @@ class LanternReader:
         self.yi, self.xi = np.indices(imgshape)
         self.guess_positions = guess_positions
         self.subdir = subdir
+        self.threshold = threshold
 
     @property
     def directory(self):
@@ -69,12 +71,13 @@ class LanternReader:
         i = 50
         if i == imax:
             mean, median, std = sigma_clipped_stats(img, sigma=10.0)
-            daofind = DAOStarFinder(fwhm=self.fwhm, threshold=25.*std) 
+            daofind = DAOStarFinder(fwhm=self.fwhm, threshold=self.threshold*std) 
             # fwhm tuned to the port sizes
             # threshold is just large relative to backgrouhd
             sources = daofind(img - median)
             xc, yc = (np.asarray(sources[k]) for k in ["xcentroid", "ycentroid"])
-            assert len(xc) == self.nports, f"should have found {self.nports} ports but found {len(xc)}"
+            if len(xc) != self.nports:
+                warnings.warn(f"should have found {self.nports} ports but found {len(xc)}")
             refined_locs = np.vstack((xc, yc)).T
 
         """# COM refinement
@@ -89,9 +92,12 @@ class LanternReader:
 
     def plot_ports(self):
         # only run after set_centroids
-        plt.scatter(self.xc, self.yc, c=self.radial_shell)
+        sc = plt.scatter(self.xc, self.yc, c=self.radial_shell)
+        plt.xlim((0, self.imgshape[1]))
+        plt.ylim((0, self.imgshape[0]))
         plt.xticks([])
         plt.yticks([])
+        sc.axes.invert_yaxis()
         for (i, (xc, yc)) in enumerate(zip(self.xc, self.yc)):
             plt.annotate(i + 1, (xc, yc), xytext=(xc+5, yc+5))
 
@@ -135,6 +141,16 @@ class LanternReader:
 
         return crop_img
 
+    def remove_port(self, idx):
+        np.delete(self.xc, idx)
+        np.delete(self.yc, idx)
+        self.xc, self.yc, self.radial_shell = self.ports_in_radial_order(np.vstack((self.xc, self.yc)))
+
+    def add_port(self, x, y):
+        self.xc = np.append(reader.xc, x)
+        self.yc = np.append(reader.yc, y)
+        self.xc, self.yc, self.radial_shell = self.ports_in_radial_order(np.vstack((self.xc, self.yc)))
+
     def get_intensities(self, img):
         mask = np.zeros_like(img)
         intensities = np.zeros(self.nports)
@@ -142,6 +158,13 @@ class LanternReader:
             intensities[i] = np.average(img[np.where((self.xi - xv) ** 2 + (self.yi - yv) ** 2 <= self.fwhm ** 2)])
 
         return intensities
+
+    def port_mask(self):
+        mask = np.zeros(self.imgshape)
+        for (xv, yv) in zip(self.xc, self.yc):
+            mask[np.where((self.xi - xv) ** 2 + (self.yi - yv) ** 2 <= self.fwhm ** 2)] = 1
+
+        return mask
 
     def reconstruct_image(self, img, intensities):
         recon_image = np.zeros_like(img)
