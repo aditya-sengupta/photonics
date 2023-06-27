@@ -137,7 +137,7 @@ class LanternReader:
             crop_img = img[bbox[2]:bbox[3], bbox[0]:bbox[1]]
 
         if savename is not None:
-            np.save(self.filepath(fname, ext="npy"), crop_img)
+            np.save(self.filepath(savename, ext="npy"), crop_img)
 
         return crop_img
 
