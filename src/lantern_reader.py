@@ -6,7 +6,7 @@ from math import floor, ceil
 from matplotlib import pyplot as plt
 from os import path
 from photutils.detection import DAOStarFinder
-from scipy.spatial import ConvexHull, QhullError
+from scipy.spatial import ConvexHull
 import warnings
 
 PROJECT_ROOT = path.dirname(path.abspath(__file__))
