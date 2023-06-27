@@ -7,6 +7,7 @@ reader = LanternReader(
     nports = 18,
     cutout_size = 20,
     fwhm = 12,
+    threshold = 25,
     ext = "png",
     imgshape = (1200, 1920),
     subdir="pl_230525"

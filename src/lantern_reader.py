@@ -147,9 +147,9 @@ class LanternReader:
         self.xc, self.yc, self.radial_shell = self.ports_in_radial_order(np.vstack((self.xc, self.yc)))
 
     def add_port(self, x, y):
-        self.xc = np.append(reader.xc, x)
-        self.yc = np.append(reader.yc, y)
-        self.xc, self.yc, self.radial_shell = self.ports_in_radial_order(np.vstack((self.xc, self.yc)))
+        self.xc = np.append(self.xc, x)
+        self.yc = np.append(self.yc, y)
+        self.xc, self.yc, self.radial_shell = self.ports_in_radial_order(np.vstack((self.xc, self.yc)).T)
 
     def get_intensities(self, img):
         mask = np.zeros_like(img)

@@ -55,5 +55,28 @@ module PhotonicLantern
         M * M' ≈ I && M' * M ≈ I
     end
 
-    export interaction_matrices, quadratic_forward, quadratic_jacobian, lpfield, make_unitary_matrix, is_unitary
+    sigma_clamp(x) = clamp(σ(x), 0.15, 0.85)
+    zero_one_ify(x) = (x .- minimum(x, dims=2)) ./ (maximum(x, dims=2) .- minimum(x, dims=2)), minimum(x, dims=2)[:,1], maximum(x, dims=2)[:,1]
+
+    function nanify(x)
+        xs = copy(x)
+        for idx in findall(xs .== 0)
+            xs[idx] = NaN
+        end
+        return xs
+    end
+    
+    function im_show(x; kwargs...)
+        heatmap(nanify(x), aspect_ratio=1, showaxis=false, grid=false, xlim=(0, size(x, 1) + 2), c=:thermal; kwargs...)
+    end
+
+    function phasewrap(x)
+        return mod(x + π, 2 * π) - π
+    end
+    
+    function rescale(v, vmin::Vector, vmax::Vector)
+        return v .* (vmax .- vmin) .+ vmin
+    end
+
+    export interaction_matrices, quadratic_forward, quadratic_jacobian, lpfield, make_unitary_matrix, is_unitary, sigma_clamp, zero_one_ify, im_show, phasewrap, rescale
 end # module PhotonicLantern
