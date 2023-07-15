@@ -26,7 +26,7 @@ model = Chain(
     Dense(500 => size(X_all, 1))
 )
 
-optim = Flux.setup(Adam(1e-8), model)
+optim = Flux.setup(Adam(1e-3), model)
 λ = 0.0
 loss(model, y, X) = Flux.mse(model(y), X) #+ λ * sum(sum(relu, -layer.weight) for layer in model.layers)
 loader = Flux.DataLoader((y_train, X_train), batchsize=32)
