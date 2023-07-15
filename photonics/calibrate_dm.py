@@ -2,11 +2,9 @@ import numpy as np
 from datetime import datetime
 from tqdm import tqdm, trange
 
-date_now = lambda: datetime.now().strftime('%Y%m%d')[2:]
-time_now = lambda: datetime.now().strftime('%H%M')
-datetime_now = lambda: date_now() + "_" + time_now()
+from .utils import *
 
-datapath = "/home/lab/asengupta/photonics/data"
+datapath = f"/home/lab/asengupta/photonics/data/pl_{date_now()}"
 
 def sharpen_psf(dm, controller, z2=3, z3=3):
     """
@@ -23,17 +21,17 @@ def sweep_mode(dm, cam, zern, minval=-1, maxval=1.05, step=0.05, device="pl"):
         img = cam.get()
         np.save(f"{datapath}/{device}_{datetime_now()}_z{zern}_a{amp}", img)
 
-def random_testing(dm, cam, N=3, lims=(-0.5,0.5), modes=np.arange(2, 20)):
+def random_testing(dm, cam, reader, N=3, lims=(-0.5,0.5), modes=np.arange(2, 20), dark=0):
     stamp = datetime_now()
     input_wavefronts = np.random.uniform(low=lims[0], high=lims[1], size=(N,len(modes)))
     np.save(f"{datapath}/inputzs_{stamp}", input_wavefronts)
     imgshape = cam.get(1).shape
-    camera_outputs = np.zeros((N,imgshape[0],imgshape[1]))
+    intensities = np.zeros((N,reader.nports))
     for (i, input_wf) in enumerate(tqdm(input_wavefronts)):
         dm.setFlatSurf()
         for (z, amp) in zip(modes, input_wf):
             dm.pokeZernike(amp, z, bias=dm.current_surf)
         img = cam.get()
-        camera_outputs[i,:,:] = img
+        intensities[i,:] = reader.get_intensities(img - dark)
 
-    np.save(f"{datapath}/pls_{stamp}", camera_outputs)
+    np.save(f"{datapath}/pls_{stamp}", intensities)

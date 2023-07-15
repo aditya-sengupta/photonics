@@ -10,7 +10,7 @@ from scipy.signal import find_peaks
 from tqdm import tqdm, trange
 
 sys.path.append("..")
-from src.lantern_reader import LanternReader, PROJECT_ROOT
+from photonics.lantern_reader import LanternReader, PROJECT_ROOT
 
 # %%
 reader = LanternReader(

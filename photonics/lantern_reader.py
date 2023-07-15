@@ -1,5 +1,8 @@
 import numpy as np
-import imageio.v3 as iio
+try:
+    import imageio.v3 as iio
+except ModuleNotFoundError:
+    import imageio as iio
 
 from astropy.stats import sigma_clipped_stats
 from math import floor, ceil
@@ -175,3 +178,7 @@ class LanternReader:
 
     def save(self, fname, data, ext="npy"):
         np.save(self.filepath(fname, ext=ext), data)
+
+    def saturation_map(self, img):
+        plt.imshow(img >= 65535)
+        plt.show()
