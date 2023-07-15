@@ -1,12 +1,15 @@
 import numpy as np
-import imageio.v3 as iio
+try:
+    import imageio.v3 as iio
+except ModuleNotFoundError:
+    import imageio as iio
 
 from astropy.stats import sigma_clipped_stats
 from math import floor, ceil
 from matplotlib import pyplot as plt
 from os import path
 from photutils.detection import DAOStarFinder
-from scipy.spatial import ConvexHull, QhullError
+from scipy.spatial import ConvexHull
 import warnings
 
 PROJECT_ROOT = path.dirname(path.abspath(__file__))
@@ -137,7 +140,7 @@ class LanternReader:
             crop_img = img[bbox[2]:bbox[3], bbox[0]:bbox[1]]
 
         if savename is not None:
-            np.save(self.filepath(fname, ext="npy"), crop_img)
+            np.save(self.filepath(savename, ext="npy"), crop_img)
 
         return crop_img
 
@@ -175,3 +178,7 @@ class LanternReader:
 
     def save(self, fname, data, ext="npy"):
         np.save(self.filepath(fname, ext=ext), data)
+
+    def saturation_map(self, img):
+        plt.imshow(img >= 65535)
+        plt.show()

@@ -5,7 +5,7 @@ sys.path.append("..")
 from os import path
 from tqdm import tqdm
 
-from src.lantern_reader import LanternReader
+from photonics.lantern_reader import LanternReader
 
 reader = LanternReader(
     nports = 18,

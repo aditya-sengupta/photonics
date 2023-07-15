@@ -1,7 +1,7 @@
 # %%
 import os, sys, re, tqdm
 sys.path.append("..")
-from src.lantern_reader import LanternReader
+from photonics.lantern_reader import LanternReader
 
 reader = LanternReader(
     nports = 18,
