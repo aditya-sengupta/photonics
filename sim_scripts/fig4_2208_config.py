@@ -18,7 +18,7 @@ from lightbeam.misc import normalize, norm_nonu, overlap_nonu, chain, chain_appl
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 if ROOT_DIR.endswith("scripts"):
     ROOT_DIR = os.path.dirname(ROOT_DIR)
-# %%
+
 D = 3.0 # m
 F = 51.0 # m
 wl = 1.55e-6
@@ -43,21 +43,23 @@ mesh = RectMesh3D(
 )
 
 lant = make_lant6_saval(offset0, rcore, rclad, 0, mesh.zw, (ncore, nclad, njack), final_scale=scale)
-
-# %%
 lant.set_sampling(mesh.xy)
 prop = Prop3D(wl0 = wl, mesh = mesh, optical_system = lant, n0 = nclad)
-
+# %%
 xg, yg = np.meshgrid(mesh.xy.xa[PML:-PML], mesh.xy.ya[PML:-PML], indexing='ij')
 s = int(rclad / (xg[1,0] - xg[0,0])) + 1/2
 pupil_grid = make_pupil_grid(mesh.xy.shape, D)
 num_airy = mesh.xw / 4 / spatial_resolution
-focal_grid = make_focal_grid(len(xg) / (4 * num_airy), num_airy, spatial_resolution=spatial_resolution)
+q = len(xg) / 4 / num_airy
+focal_grid = make_focal_grid(q, num_airy, spatial_resolution=spatial_resolution)
 # shaneAO f number
 fprop = FraunhoferPropagator(pupil_grid, focal_grid)
 w = mesh.xy.get_weights()
 mask = (xg ** 2 + yg ** 2 <= rclad ** 2)
-d = int((xg.shape[0] - 2 * s) // 2)
+dm = int((xg.shape[0] - 2 * s) // 2)
+pad_reqd = (xg.shape[0] - focal_grid.shape[0])
+d_minus = pad_reqd // 2
+d_plus = d_minus + (pad_reqd % 2)
 
 # %%
 def save_for_zampl(zern, ampl, save=True):
@@ -65,7 +67,7 @@ def save_for_zampl(zern, ampl, save=True):
     aberration = np.exp(1j * ampl * phase)
     wf = Wavefront(aberration, wavelength=prop.wl0)
     u_inz = np.array(fprop(wf).electric_field.shaped)
-    u_inz = normalize(np.pad(u_inz, ((d, d), (d, d))) * mask)
+    u_inz = normalize(np.pad(u_inz, ((d_minus, d_plus), (d_minus, d_plus))) * mask)
     u = prop.prop2end(u_inz, remesh_every=0)
     if save:
         np.save(os.path.join(ROOT_DIR, f"data/zerns/2208_4_{zern}_{ampl}.npy"), u)
@@ -73,15 +75,13 @@ def save_for_zampl(zern, ampl, save=True):
 
 assert lant.check_smfs(2 * np.pi / wl)
 assert lant.check_mode_support(2 * np.pi / wl)
-
 # %%
 def plot_zernike_prop(zern, ampl):
     phase = zernike_ansi(zern)(pupil_grid)
     aberration = np.exp(1j * ampl * phase)
     wf = Wavefront(aberration, wavelength=prop.wl0)
     u_in = np.array(fprop(wf).electric_field.shaped)
-    d = int((xg.shape[0] - 2 * s) // 2)
-    u_in = normalize(np.pad(u_in, ((d, d), (d, d))) * mask)
+    u_in = normalize(np.pad(u_in, ((d_minus, d_plus), (d_minus, d_plus))) * mask)
     u_out = prop.prop2end(u_in, remesh_every=0)
     fig, axs = plt.subplots(1, 2)
     for ax in axs:
@@ -92,7 +92,7 @@ def plot_zernike_prop(zern, ampl):
     axs[1].imshow(np.abs(u_out))
     axs[1].set_title("Zernike lantern output")
 
-# %%
+
 def plot_lp_prop(l, m):
     u_in = normalize(lpfield(xg, yg, l, m, rclad, wl, ncore, nclad))
     u_out = prop.prop2end(u_in, remesh_every=0)
@@ -104,6 +104,8 @@ def plot_lp_prop(l, m):
     axs[0].set_title(f"LP {l}, {m} input intensity")
     axs[1].imshow(np.abs(u_out))
     axs[1].set_title("LP lantern output")
+# %%
+u = save_for_zampl(3, 1.0, save=False)
 
 # %%
 if __name__ == "__main__":
@@ -121,17 +123,18 @@ if __name__ == "__main__":
     if 'darwin' in sys.platform:
         print('Running \'caffeinate\' on MacOSX to prevent the system from sleeping')
         subprocess.Popen('caffeinate')
-    if len(sys.argv) > 1:
+    if len(sys.argv) > 1 and "ip" not in sys.argv[1]:
         zerns = [int(sys.argv[1])]
     else:
         zerns = [1, 2, 3, 4, 5]
 
-    if len(sys.argv) > 2:
+    if len(sys.argv) > 2 and "ip" not in sys.argv[1]:
         ampls = [float(sys.argv[2])]
     else:
         ampls = np.linspace(-1, 1, 11)
     
     for (zern, ampl) in product(zerns, ampls):
+        print(f"Zernike {zern}, amplitude {ampl}")
         save_for_zampl(zern, ampl)
 
 # %%
