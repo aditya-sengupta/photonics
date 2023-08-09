@@ -1,13 +1,11 @@
-# %%
 import subprocess
+from astropy.io import fits
+from datetime import datetime
+from functools import reduce
+from time import sleep
+from tqdm import tqdm, trange
 
 if False: # post-trip don't accidentally run this!
-    from astropy.io import fits
-    from datetime import datetime
-    from functools import reduce
-    from time import sleep
-    from tqdm import tqdm, trange
-
     Nmodes = 12 # for now
 
     def save_telemetry(wait=0):
@@ -35,7 +33,6 @@ if False: # post-trip don't accidentally run this!
         assert np.all(np.abs(amplitudes) <= 5.0), "sending out-of-bounds amplitudes"
         command = ",".join(map(str, amplitudes))
         shell_command = ["ssh", "-Y", "gavel@shade.ucolick.org", "local/bin/imageSharpen", "-s", command]
-        # print(" ".join(shell_command))
         subprocess.run(shell_command)
 
     def send_zeros():

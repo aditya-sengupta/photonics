@@ -1,7 +1,7 @@
 .CondaPkg
 .venv
 .vscode
-data
+data/*
 .DS_Store
 scripts/__pycache__
 meep
