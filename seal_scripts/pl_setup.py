@@ -23,6 +23,7 @@ c = 0.5
 dm_slm = DM_seal('slm',slm,[nAct_across,c])
 
 c = blackFly_camera("PhotoL.sh")
+print("Initialized camera, setting port positions")
 reader.set_centroids(c.get(10000))
 
 input("Turn off the laser!")
