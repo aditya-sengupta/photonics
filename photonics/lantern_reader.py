@@ -4,38 +4,47 @@ try:
 except ModuleNotFoundError:
     import imageio as iio
 
+import os
+from os import path
 from astropy.stats import sigma_clipped_stats
 from math import floor, ceil
 from matplotlib import pyplot as plt
-from os import path
 from photutils.detection import DAOStarFinder
 from scipy.spatial import ConvexHull
 import warnings
 
-PROJECT_ROOT = path.dirname(path.abspath(__file__))
-if "src" in PROJECT_ROOT or "scripts" in PROJECT_ROOT:
-    PROJECT_ROOT = path.dirname(PROJECT_ROOT)
+from .utils import date_now, datetime_now, angles_relative_to_center
 
-def angles_relative_to_center(x, y):
-    xc, yc = np.mean(x), np.mean(y)
-    xd, yd = x - xc, y - yc
-    return (np.arctan2(yd, xd) + 3 * np.pi / 2) % (2 * np.pi)
+PROJECT_ROOT = path.dirname(path.dirname(path.abspath(__file__)))
+DATA_PATH = path.join(PROJECT_ROOT, "data")
+if not os.path.isdir(DATA_PATH):
+    os.mkdir(DATA_PATH)
 
 class LanternReader:
-    def __init__(self, nports, cutout_size, fwhm, threshold, ext, imgshape, guess_positions=[], subdir=""):
+    """
+    A LanternReader contains information about how to interpret a photonic lantern image. 
+
+    During initialization, it identifies the number of ports in the image and their locations, and 
+    """
+    def __init__(self, nports, fwhm, threshold, ext, imgshape, guess_positions=[], subdir=None):
         self.nports = nports
-        self.cutout_size = cutout_size
         self.ext = ext
         self.fwhm = fwhm
         self.imgshape = imgshape
         self.yi, self.xi = np.indices(imgshape)
         self.guess_positions = guess_positions
+        if subdir is None:
+            subdir = f"pl_{date_now()}"
         self.subdir = subdir
+        if not os.path.isdir(self.directory):
+            os.mkdir(self.directory)
+        print(f"Path for data saving set to {self.directory}")
         self.threshold = threshold
+        self.save_intensities = True # if False, save full images
 
     @property
     def directory(self):
-        return path.join(PROJECT_ROOT, "data", self.subdir)
+        return path.join(DATA_PATH, self.subdir)
 
     def filepath(self, fname, ext=None):
         """
@@ -43,7 +52,7 @@ class LanternReader:
         """
         if ext is None:
             ext = self.ext
-        return path.join(PROJECT_ROOT, "data", self.subdir, fname + "." + ext)
+        return path.join(DATA_PATH, self.subdir, fname + "." + ext)
 
     def read_image(self, fname):
         path_to_file = self.filepath(fname)
@@ -63,7 +72,7 @@ class LanternReader:
         imgc = img.copy()
         locs = []
         i = 0
-        s = self.cutout_size
+        s = 20
         while len(self.guess_positions) < self.nports and i < imax:
             ind = np.unravel_index(np.argmax(imgc, axis=None), img.shape)
             if np.sum(imgc[ind[0]-s:ind[0]+s, ind[1]-s:ind[1]+s]) > min_energy:
@@ -71,17 +80,16 @@ class LanternReader:
             imgc[ind[0]-s:ind[0]+s,ind[1]-s:ind[1]+s] = 0
             i += 1
         """
-        i = 50
-        if i == imax:
-            mean, median, std = sigma_clipped_stats(img, sigma=10.0)
-            daofind = DAOStarFinder(fwhm=self.fwhm, threshold=self.threshold*std) 
-            # fwhm tuned to the port sizes
-            # threshold is just large relative to backgrouhd
-            sources = daofind(img - median)
-            xc, yc = (np.asarray(sources[k]) for k in ["xcentroid", "ycentroid"])
-            if len(xc) != self.nports:
-                warnings.warn(f"should have found {self.nports} ports but found {len(xc)}")
-            refined_locs = np.vstack((xc, yc)).T
+        mean, median, std = sigma_clipped_stats(img, sigma=10.0)
+        daofind = DAOStarFinder(fwhm=self.fwhm, threshold=self.threshold*std) 
+        # fwhm tuned to the port sizes
+        # threshold is just large relative to background
+        sources = daofind(img - median)
+        xc, yc = (np.asarray(sources[k]) for k in ["xcentroid", "ycentroid"])
+        if len(xc) != self.nports:
+            warnings.warn(f"should have found {self.nports} ports but found {len(xc)}")
+            self.save_intensities = False
+        refined_locs = np.vstack((xc, yc)).T
 
         """# COM refinement
         refined_locs = []
@@ -93,7 +101,7 @@ class LanternReader:
 
         self.xc, self.yc, self.radial_shell = self.ports_in_radial_order(np.array(refined_locs))
 
-    def plot_ports(self):
+    def plot_ports(self, save=False):
         # only run after set_centroids
         sc = plt.scatter(self.xc, self.yc, c=self.radial_shell)
         plt.xlim((0, self.imgshape[1]))
@@ -104,6 +112,8 @@ class LanternReader:
         for (i, (xc, yc)) in enumerate(zip(self.xc, self.yc)):
             plt.annotate(i + 1, (xc, yc), xytext=(xc+5, yc+5))
 
+        if save:
+            plt.savefig(self.filepath(f"port_mask_{datetime_now()}", ext="png"))
         plt.show()
 
     def ports_in_radial_order(self, points):
@@ -176,9 +186,13 @@ class LanternReader:
 
         return recon_image
 
-    def save(self, fname, data, ext="npy"):
+    def save(self, fname, data, ext="npy", verbose=True):
+        fpath = self.filepath(fname, ext=ext)
+        if verbose:
+            print(f"Saving data to {fpath}")
         np.save(self.filepath(fname, ext=ext), data)
 
     def saturation_map(self, img):
         plt.imshow(img >= 65535)
+        plt.title("Saturation map")
         plt.show()

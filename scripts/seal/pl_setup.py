@@ -9,7 +9,6 @@ from cameras import blackFly_camera
 
 reader = LanternReader(
     nports = 18,
-    cutout_size = 20,
     fwhm = 18,
     threshold = 25,
     ext = "png",

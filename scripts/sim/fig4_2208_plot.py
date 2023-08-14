@@ -24,7 +24,7 @@ if __name__ == "__main__":
         zfiles = list(filter(lambda x: x.startswith(f"2208_4_{z}"), files))
 
     for z in input_zerns:
-        zfiles = list(filter(lambda x: x.startswith(f"2208_4_{z}"), files))
+        zfiles = list(filter(lambda x: x.startswith(f"2208_4_{z}"), files))[:11]
         for (j, f) in enumerate(tqdm(zfiles)):
             ampl = float(re.match(fr"2208_4_{z}_(\S+).npy", f).group(1))
             ampls[z-1][j] = ampl

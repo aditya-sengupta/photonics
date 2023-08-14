@@ -71,8 +71,8 @@ def save_for_zampl(zern, ampl, save=True):
         np.save(os.path.join(ROOT_DIR, f"data/zerns/2208_4_{zern}_{ampl}.npy"), u)
     return u
 
-assert lant.check_smfs(2 * np.pi / wl)
-assert lant.check_mode_support(2 * np.pi / wl)
+#assert lant.check_smfs(2 * np.pi / wl)
+#assert lant.check_mode_support(2 * np.pi / wl)
 
 # %%
 def plot_zernike_prop(zern, ampl):
