@@ -1,7 +1,7 @@
 # %%
 import os, subprocess, sys
 import numpy as np
-from matplotlib import pyplot as plt
+# from matplotlib import pyplot as plt
 from astropy import units as u
 
 from itertools import product
@@ -76,8 +76,8 @@ ref_wf = Wavefront(ref_aberration, wavelength=prop.wl0)
 ref_u = np.array(fprop(ref_wf).electric_field.shaped)
 ref_u = normalize(np.pad(ref_u, ((d, d), (d, d))) * mask)
 out_core = (out[PML:-PML, PML:-PML] > njack*njack).astype(np.float64)
-plt.imshow(np.logical_xor(binarize(out_core), binarize(ref_u)))
-plt.title("XOR of FMF input and beam input")
+#plt.imshow(np.logical_xor(binarize(out_core), binarize(ref_u)))
+#plt.title("XOR of FMF input and beam input")
 # %%
 def save_for_zampl(zern, ampl, save=True, verbose=True, r=trange):
     if verbose:
@@ -87,13 +87,13 @@ def save_for_zampl(zern, ampl, save=True, verbose=True, r=trange):
     wf = Wavefront(aberration, wavelength=prop.wl0)
     u_inz = np.array(fprop(wf).electric_field.shaped)
     u_inz = normalize(np.pad(u_inz, ((d, d), (d, d))) * mask)
-    return u_inz
-    u = prop.prop2end(u_inz, remesh_every=0, verbose=False, r=r)
+    #return u_inz
+    u = prop.prop2end(u_inz, remesh_every=0)
     savepath = os.path.join(ROOT_DIR, f"data/zerns/2208_4_{zern}_{ampl}.npy")
-    """if save:
+    if save:
         np.save(savepath, u)
         if verbose:
-            print(savepath)"""
+            print(savepath)
     return u
 
 assert lant.check_smfs(2 * np.pi / wl)
@@ -151,5 +151,5 @@ if 'darwin' in sys.platform:
 zerns = [1, 2, 3, 4, 5]
 ampls = np.linspace(-1, 1, 21)
 
-Parallel(n_jobs=10)(delayed(save_for_zampl)(z, a, save=False, verbose=True, r=trange) for z, a in product(zerns, ampls))
+Parallel(n_jobs=1)(delayed(save_for_zampl)(z, a, save=False, verbose=False, r=trange) for z, a in product(zerns, ampls))
 # %%
