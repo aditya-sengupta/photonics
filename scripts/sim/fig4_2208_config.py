@@ -17,7 +17,7 @@ from lightbeam.misc import normalize, norm_nonu, overlap_nonu, chain, chain_appl
 
 from joblib import Parallel, delayed
 
-from tqdm import trange
+from tqdm import trange, tqdm
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 if ROOT_DIR.endswith("sim"):
@@ -87,13 +87,12 @@ def save_for_zampl(zern, ampl, save=True, verbose=True, r=trange):
     wf = Wavefront(aberration, wavelength=prop.wl0)
     u_inz = np.array(fprop(wf).electric_field.shaped)
     u_inz = normalize(np.pad(u_inz, ((d, d), (d, d))) * mask)
-    return u_inz
     u = prop.prop2end(u_inz, remesh_every=0, verbose=False, r=r)
     savepath = os.path.join(ROOT_DIR, f"data/zerns/2208_4_{zern}_{ampl}.npy")
-    """if save:
+    if save:
         np.save(savepath, u)
         if verbose:
-            print(savepath)"""
+            print(savepath)
     return u
 
 assert lant.check_smfs(2 * np.pi / wl)
@@ -143,13 +142,32 @@ for pos in lant.final_core_locs:
     output_powers.append(np.power(overlap_nonu(_m,u_outz,w),2))
 print("output_powers")"""
 
+def prop_and_save(u_inz, z, a):
+    print(z, a)
+    u = prop.prop2end(u_inz, remesh_every=0, verbose=False, r=range)
+    savepath = os.path.join(ROOT_DIR, f"data/zerns/2208_4_{z}_{a}.npy")
+    print(savepath)
+    np.save(savepath, u)
+
 # %%
-if 'darwin' in sys.platform:
-    print('Running \'caffeinate\' on MacOSX to prevent the system from sleeping')
-    subprocess.Popen('caffeinate')
+if __name__ == "__main__":
+    if 'darwin' in sys.platform:
+        print('Running \'caffeinate\' on MacOSX to prevent the system from sleeping')
+        subprocess.Popen('caffeinate')
 
-zerns = [1, 2, 3, 4, 5]
-ampls = np.linspace(-1, 1, 21)
+    zerns = [1, 2]
+    ampls = np.linspace(-1, 1, 5)
 
-Parallel(n_jobs=10)(delayed(save_for_zampl)(z, a, save=False, verbose=True, r=trange) for z, a in product(zerns, ampls))
+    input_fields = []
+    for (zern, ampl) in tqdm(list(product(zerns, ampls))):
+        phase = zernike_ansi(zern)(pupil_grid)
+        aberration = np.exp(1j * ampl * phase)
+        wf = Wavefront(aberration, wavelength=prop.wl0)
+        u_inz = np.array(fprop(wf).electric_field.shaped)
+        u_inz = normalize(np.pad(u_inz, ((d, d), (d, d))) * mask)
+        input_fields.append(u_inz)
+
+    # %%
+    Parallel(n_jobs=10)(delayed(prop_and_save)(u, z, a) for u, (z, a) in zip(input_fields, product(zerns, ampls)))
+
 # %%
