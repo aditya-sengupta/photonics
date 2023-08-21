@@ -1,11 +1,11 @@
 # %%
 import os, sys, re, tqdm
+from matplotlib import pyplot as plt
 sys.path.append("..")
 from photonics.lantern_reader import LanternReader
 
 reader = LanternReader(
     nports = 18,
-    cutout_size = 20,
     fwhm = 12,
     threshold = 25,
     ext = "png",
