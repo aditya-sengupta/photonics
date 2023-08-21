@@ -1,11 +1,13 @@
 import subprocess
 import numpy as np
+import PySpin
 from astropy.io import fits
 from functools import reduce
 from time import sleep, time
 from tqdm import tqdm, trange
 import warnings
 
+from .flir import configure_trigger, acquire_image, reset_trigger
 from .lantern_reader import LanternReader
 from .utils import datetime_ms_now, time_ms_now
 
@@ -24,6 +26,29 @@ class ShaneLantern:
         self.reader = reader
         self.Nmodes = Nmodes
         self.curr_dmc = np.zeros(Nmodes)
+        self.initialize_camera()
+
+    def initialize_camera(self):
+        self.cam = None
+        self.system = PySpin.System.GetInstance()
+        self.cam_list = system.GetCameras()
+        num_cameras = cam_list.GetSize()
+        if num_cameras != 1:
+            self.deinitialize_camera()
+            print(f'Found {num_cameras} cameras where 1 was expected; aborting.')
+            return
+
+        self.cam = cam_list[0]
+        self.nodemap_tldevice = self.cam.GetTLDeviceNodeMap()
+        self.cam.Init()
+        self.nodemap = self.cam.GetNodeMap()
+        
+    def deinitialize_camera(self):
+        if self.cam is not None:
+            self.cam.DeInit()
+        del self.cam
+        self.cam_list.Clear()
+        self.system.ReleaseInstance()
 
     def zern_to_dm(self, z, amp):
         assert type(z) == int, "first argument must be an integer (Zernike number)"
@@ -53,10 +78,9 @@ class ShaneLantern:
         """
         Get an image off the lantern camera. 
         """
-        if verbose:
-            print("Not implemented, waiting on PySpin API")
-        img = np.zeros(self.reader.imgshape)
-        return img
+        configure_trigger(self.cam)
+        img = acquire_image(self.cam, self.nodemap, self.nodemap_tldevice)
+        reset_trigger(self.nodemap)
 
     def send_zeros(self, verbose=True):
         self.curr_dmc[:] = 0.0
