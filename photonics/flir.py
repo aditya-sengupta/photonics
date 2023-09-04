@@ -193,6 +193,7 @@ def acquire_image(cam, nodemap, nodemap_tldevice):
     :rtype: bool
     """
     try:
+        result=True
         node_acquisition_mode = PySpin.CEnumerationPtr(nodemap.GetNode('AcquisitionMode'))
         if not PySpin.IsReadable(node_acquisition_mode) or not PySpin.IsWritable(node_acquisition_mode):
             print('Unable to set acquisition mode to continuous (enum retrieval). Aborting...')
@@ -240,7 +241,7 @@ def acquire_image(cam, nodemap, nodemap_tldevice):
         # processor.SetColorProcessing(PySpin.SPINNAKER_COLOR_PROCESSING_ALGORITHM_HQ_LINEAR)
 
         try:
-            result &= grab_next_image_by_trigger(nodemap, cam)
+            #result &= grab_next_image_by_trigger(nodemap, cam)
             image_result = cam.GetNextImage(1000)
 
             #  Ensure image completion
@@ -251,6 +252,8 @@ def acquire_image(cam, nodemap, nodemap_tldevice):
                 image_converted = processor.Convert(image_result, PySpin.PixelFormat_Mono16)
 
                 arr = image_converted.GetNDArray()
+                print(type(arr))
+                print(arr.shape)
 
                 #  Release image
                 #
@@ -339,7 +342,7 @@ def run_single_camera(cam):
             return False
 
         # Acquire images
-        result &= acquire_images(cam, nodemap, nodemap_tldevice)
+        result &= acquire_image(cam, nodemap, nodemap_tldevice)
 
         # Reset trigger
         result &= reset_trigger(nodemap)
@@ -388,7 +391,7 @@ def main():
         return False
 
     cam = cam_list[0]
-    result &= run_single_camera(cam)
+    #result &= run_single_camera(cam)
 
     # Release reference to camera
     # NOTE: Unlike the C++ examples, we cannot rely on pointer objects being automatically

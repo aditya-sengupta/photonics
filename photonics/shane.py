@@ -31,14 +31,16 @@ class ShaneLantern:
     def initialize_camera(self):
         self.cam = None
         self.system = PySpin.System.GetInstance()
-        self.cam_list = system.GetCameras()
-        num_cameras = cam_list.GetSize()
-        if num_cameras != 1:
+        self.cam_list = self.system.GetCameras()
+        self.num_cameras = self.cam_list.GetSize()
+        print(f"Num detected = {self.num_cameras}")
+        if self.num_cameras != 1:
             self.deinitialize_camera()
-            print(f'Found {num_cameras} cameras where 1 was expected; aborting.')
+            print(f'Found {self.num_cameras} cameras where 1 was expected; aborting.')
             return
 
-        self.cam = cam_list[0]
+        self.cam = self.cam_list[0]
+        print(f"self.cam = {self.cam}")
         self.nodemap_tldevice = self.cam.GetTLDeviceNodeMap()
         self.cam.Init()
         self.nodemap = self.cam.GetNodeMap()
@@ -81,6 +83,7 @@ class ShaneLantern:
         configure_trigger(self.cam)
         img = acquire_image(self.cam, self.nodemap, self.nodemap_tldevice)
         reset_trigger(self.nodemap)
+        return img
 
     def send_zeros(self, verbose=True):
         self.curr_dmc[:] = 0.0
