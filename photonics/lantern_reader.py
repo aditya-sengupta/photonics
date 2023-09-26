@@ -193,6 +193,6 @@ class LanternReader:
         np.save(self.filepath(fname, ext=ext), data)
 
     def saturation_map(self, img):
-        plt.imshow(img >= 65535)
+        plt.imshow(img >= 65000)
         plt.title("Saturation map")
         plt.show()

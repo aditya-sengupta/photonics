@@ -1,33 +1,61 @@
-# improvising this
-# todo later/in consultation with Vincent or after we've agreed on a procedure, put this into libSEAL
-
+import numpy as np
+import sys
+from photonics import LanternReader, date_now
+from functools import partial
+import time
 from tqdm import trange
 
-from .pl_setup import *
+sys.path.append(r"/home/lab/libSEAL")
+from wfAffectors import SLM, DM_seal
+from wfSensors import PhotonicLantern
+from cameras import blackFly_camera
+from wfControllers import integrator
 
-poke_amplitude = 0.1
+reader = LanternReader(
+    nports = 18,
+    fwhm = 18,
+    threshold = 25,
+    ext = "png",
+    imgshape = (1200, 1920),
+    subdir="pl_" + date_now()
+)
 
-def pl_interaction_matrix(dm, cam):
-    N = reader.nports
-    A = np.zeros((N, N))
-    for z in trange(reader.nports):
-        for s in [-1, 1]:
-            dm.pokeZernike(s * amp, z + 2)
-            A[z, :] += (s / 2) * reader.get_intensities(cam.get())
-    return A
+amp_calib = 0.02
+thres = 1/30
 
-def pl_command_matrix(dm, cam):
-    IM = pl_interaction_matrix(dm, cam)
-    return np.linalg.pinv(IM, rcond=1e-6)
+slm = SLM()
+dm_slm = DM_seal('slm',slm,[5,0.5])
 
-# probably check if the command matrix evaluated at the flat position is all ~zero
+c = blackFly_camera("PhotoL.sh")
+plwfs = PhotonicLantern(c, reader)
+plwfs.modal = 'zernike'
+input("Turn off the laser!")
+c.getDark()
+input("Turn on the laser!")
 
-def close_loop(dm, cam, CM, niter=10, gain=0.9, leak=0.99):
-    prev_dmc = np.zeros(reader.nports)
-    for _ in range(niter):
-        measurement = reader.get_intensities(cam.get())
-        dmc = gain * (CM @ measurement) + leak * prev_dmc
-        prev_dmc = dmc
-        dm.pokeZernike(0, 0)
-        for (z, d) in enumerate(dmc):
-            dm.pokeZernike(z + 2, d, bias=dm.current_surf)
+calibrate = lambda dm: plwfs.calibrate(dm, amp_calib, reader.nports)
+
+def pl_controller(dm, gain=0.1):
+    controller = integrator(plwfs, dm)
+    controller.loopgain = gain
+    return controller
+
+def pl_correct(dm, controller, amp, zern):
+    true_flat = np.copy(dm.flat_surf())
+    dm.newFlat(dm.pokeZernike(amp, zern))
+    controller.closeLoop(10)
+    input("Done, press any key to end. ")
+    dm.setFlatSurf(true_flat)
+
+
+#print("Initialized camera, setting port positions")
+#reader.set_centroids(c.get(100))
+
+"""input("Turn off the laser!")
+dark = c.get(100)
+input("Turn on the laser!")
+
+# stop here, check port masking etc
+# then do run(dm=dm_alpao) or run(dm=dm_alpao, N=1000)
+
+run = partial(random_testing, dm=dm_slm, cam=c, reader=reader, lims=(-0.12,0.12), modes=np.arange(2, 11))"""
