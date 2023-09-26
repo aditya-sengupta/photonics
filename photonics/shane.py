@@ -1,6 +1,10 @@
+from modulefinder import Module
 import subprocess
 import numpy as np
-import PySpin
+try:
+    import PySpin
+except ModuleNotFoundError:
+    pass
 from astropy.io import fits
 from functools import reduce
 from time import sleep, time

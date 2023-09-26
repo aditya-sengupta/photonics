@@ -1,9 +1,6 @@
 import numpy as np
 import sys
 from photonics import LanternReader, date_now
-from functools import partial
-import time
-from tqdm import trange
 
 sys.path.append(r"/home/lab/libSEAL")
 from wfAffectors import SLM, DM_seal
@@ -41,11 +38,12 @@ def pl_controller(dm, gain=0.1):
     return controller
 
 def pl_correct(dm, controller, amp, zern):
-    true_flat = np.copy(dm.flat_surf())
+    plwfs.update_flat(dm)
+    true_flat = np.copy(dm.flat_surf)
     dm.newFlat(dm.pokeZernike(amp, zern))
     controller.closeLoop(10)
     input("Done, press any key to end. ")
-    dm.setFlatSurf(true_flat)
+    dm.newFlat(true_flat)
 
 
 #print("Initialized camera, setting port positions")

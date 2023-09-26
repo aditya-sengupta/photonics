@@ -13,12 +13,7 @@ from photutils.detection import DAOStarFinder
 from scipy.spatial import ConvexHull
 import warnings
 
-from .utils import date_now, datetime_now, angles_relative_to_center
-
-PROJECT_ROOT = path.dirname(path.dirname(path.abspath(__file__)))
-DATA_PATH = path.join(PROJECT_ROOT, "data")
-if not os.path.isdir(DATA_PATH):
-    os.mkdir(DATA_PATH)
+from .utils import date_now, datetime_now, angles_relative_to_center, PROJECT_ROOT, DATA_PATH
 
 class LanternReader:
     """
