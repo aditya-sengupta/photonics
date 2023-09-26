@@ -1,11 +1,8 @@
 module PhotonicLantern
     using Tullio
     using SpecialFunctions
-    #ENV["JULIA_CONDAPKG_BACKEND"] = :Null
-    #ENV["JULIA_PYTHONCALL_EXE"] = "./.venv/bin/python"
-    using PythonCall
     using LinearAlgebra: I
-    # lightbeam = pyimport("lightbeam")
+    using Plots
 
     """
     Makes the ideal interaction matrices B and C out of a forward matrix A.

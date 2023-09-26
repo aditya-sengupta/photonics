@@ -1,5 +1,6 @@
 using NPZ
 using Plots
+using LinearAlgebra: svd
 
 # cd("photonics")
 
