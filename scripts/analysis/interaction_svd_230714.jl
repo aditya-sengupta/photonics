@@ -47,7 +47,7 @@ begin
     for (col, s) in zip(eachcol(Vt), S)
         push!(
             pl,
-            scatter(port_positions[1,:], port_positions[2,:], msw=0, aspect_ratio=:equal, legend=nothing, grid=nothing, showaxis=false, ms=2, alpha=clamp.((col * s) ./ m, 0.04, 1))
+            scatter(port_positions[1,:], port_positions[2,:], msw=0, aspect_ratio=:equal, legend=nothing, grid=nothing, showaxis=false, ms=2, alpha=clamp.((col * s) ./ m, 0.2, 1))
         )
     end
     plot(pl..., layout=(3,6), plot_title="Principal lantern responses", plot_titlefontsize=13)
