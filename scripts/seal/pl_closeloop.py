@@ -37,11 +37,12 @@ def pl_controller(dm, gain=0.1):
     controller.loopgain = gain
     return controller
 
-def pl_correct(dm, controller, amp, zern):
+def pl_correct(dm, controller, amp, zern, niter=10):
     plwfs.update_flat(dm)
     true_flat = np.copy(dm.flat_surf)
     dm.newFlat(dm.pokeZernike(amp, zern))
-    controller.closeLoop(10)
+    input("Start loop closing.")
+    controller.closeLoop(niter)
     input("Done, press any key to end. ")
     dm.newFlat(true_flat)
 
