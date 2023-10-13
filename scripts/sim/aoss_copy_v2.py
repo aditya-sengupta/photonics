@@ -45,6 +45,7 @@ def make_command_matrix(deformable_mirror, pwfs, wfs_camera, wf):
 grid_size=120 #define number of pixels across our telescope aperture.
 D=1  #define the telescope size in meters.
 pupil_grid = make_pupil_grid(grid_size, diameter=D)  #define our aperture grid (pupil grid)
+pwfs_grid = make_pupil_grid(120, 195/14)
 telescope_aperture = make_circular_aperture(D)  #this is a function that returns a telescope generator. Note this is a function.
 telescope_pupil=telescope_aperture(pupil_grid)   #telescope aperture (primary mirror)
 plt.figure()
@@ -85,7 +86,7 @@ deformable_mirror = DeformableMirror(influence_functions)
 
 # %%
 # setup Pyramid WFS
-pwfs = PyramidWavefrontSensorOptics(pupil_grid, pwfs_grid, wavelength_0=wavelength_wfs)
+pwfs = PyramidWavefrontSensorOptics(pupil_grid, pwfs_grid, wavelength_0=wavelength)
 wfs_camera = NoiselessDetector(pupil_grid)
 
 #commands to modulate the PyWFS, get an image out, and calculate a reference slope
@@ -98,7 +99,7 @@ img_ref = wfs_camera.read_out()
 CM=make_command_matrix(deformable_mirror, pwfs, wfs_camera, wf)
 # %%
 #leaky integrator parameters
-gain = 0.7
+gain = 0.3
 leakage = 0.999
 
 #AO loop speed: 800Hz
