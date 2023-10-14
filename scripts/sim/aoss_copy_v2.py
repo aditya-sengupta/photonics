@@ -2,11 +2,9 @@
 from hcipy import *
 
 import numpy as np
-from matplotlib import pyplot as plt
+import matplotlib.pyplot as plt
 from tqdm import trange
 # %%
-#@title
-
 def make_command_matrix(deformable_mirror, pwfs, wfs_camera, wf):
 
   probe_amp = 0.02 * wf.wavelength
@@ -130,12 +128,6 @@ for timestep in trange(num_iterations):
     wf_after_dm = deformable_mirror.forward(wf_after_atmos)
 
     #send the wavefront containing the residual wavefront error to the PyWFS and get slopes
-    """wfs_wf = mpwfs.forward(wf_after_dm)
-    for mmm in range (modsteps) :
-              wfs_camera.integrate(wfs_wf[mmm], dt/modsteps)
-    wfs_image = bin(wfs_camera.read_out().shaped,pyr_bin).flatten()
-    slopes = pyramid_slopes(wfs_image/wfs_image.sum(),pixels_pyramid_pupils) -pyr_ref
-    slopes = slopes.ravel()"""
     wf_pyr = pwfs.forward(wf_after_dm)
 
     wfs_camera.integrate(wf_pyr, dt)

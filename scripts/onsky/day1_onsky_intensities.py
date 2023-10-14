@@ -3,7 +3,7 @@ import numpy as np
 import imageio.v3 as iio
 import os, sys
 
-from matplotlib import pyplot as plt
+import matplotlib.pyplot as plt
 from scipy.stats import linregress
 from tqdm import tqdm
 

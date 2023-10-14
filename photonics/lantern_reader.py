@@ -8,7 +8,7 @@ import os
 from os import path
 from astropy.stats import sigma_clipped_stats
 from math import floor, ceil
-from matplotlib import pyplot as plt
+import matplotlib.pyplot as plt
 from photutils.detection import DAOStarFinder
 from scipy.spatial import ConvexHull
 import warnings

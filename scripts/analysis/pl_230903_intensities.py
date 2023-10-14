@@ -3,7 +3,7 @@ import os
 import photonics 
 import imageio.v3 as iio
 import numpy as np
-from matplotlib import pyplot as plt
+import matplotlib.pyplot as plt
 from itertools import product
 from tqdm import tqdm, trange
 # %%
