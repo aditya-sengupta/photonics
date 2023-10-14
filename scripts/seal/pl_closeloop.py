@@ -31,8 +31,31 @@ c.getDark()
 input("Turn on the laser!")
 
 calibrate = lambda dm: plwfs.calibrate(dm, amp_calib, reader.nports)
+rms = lambda x: np.sqrt(np.sum(x ** 2))
 
 # turb = atm(1.5, 635e-9, 0.75, 5, 40, 1e-3, slm)
+
+def slm_onestep(dm_slm, lim=0.02, nmodes=3):
+    mode_numbers = np.arange(2, nmodes + 2)
+    if plwfs.cmdMat.shape[0] != nmodes:
+        plwfs.calibrate(dm_slm, lim, nmodes)
+    plwfs.update_flat(dm_slm)
+    amp = np.random.uniform(-lim, lim, nmodes)
+    dm_slm.pokeZernike(amp, mode_numbers)
+    rms_before = rms(slm.phasemap)
+    print(f"Applied        {amp}")
+    reconstructions = []
+    for _ in range(5):
+        reconstructions.append(plwfs.img2cmd(plwfs.getImage()))
+    reconstructions = np.array(reconstructions)
+    reconstruction = np.mean(reconstructions, axis=0)
+    sd = np.std(reconstructions, axis=0)
+    print(f"Reconstructed  {reconstruction}")
+    print(f"Recon. z-score {(amp - reconstruction) / sd}")
+
+    dm_slm.pokeZernike(amp - reconstruction, mode_numbers)
+    rms_after = rms(slm.phasemap)
+    return rms_after / rms_before
 
 def pl_controller(dm, gain=0.1):
     controller = integrator(plwfs, dm)
@@ -52,11 +75,12 @@ def pl_correct(dm, controller, amp, zern, niter=10):
 def pl_correct_slmzern(dm, controller, dm_slm, niter=10, limslm=0.3):
     plwfs.update_flat(dm)
     # u, s, v = np.linalg.svd(plwfs.cmdMat)
-    amp = np.random.uniform(-limslm, limslm, plwfs.reader.nports)
+    z = np.arange(2, 5)
+    amp = np.random.uniform(-limslm, limslm, len(z))
     dm_slm.pokeZernike(
         amp,
         #u @ np.linalg.lstsq(u, amp, rcond=-1)[0], 
-        np.arange(2, 20)
+        z
     )
     init_wf_read = plwfs.img2cmd(plwfs.getImage())
     input("Start loop closing.")
