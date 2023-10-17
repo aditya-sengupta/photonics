@@ -1,7 +1,6 @@
 import numpy as np
 import sys
-from photonics import LanternReader, date_now
-from photonics import slm_onestep, pl_controller, pl_correct, pl_correct_slmzern, pl_turb_correct
+from photonics import LanternReader, date_now, pl_controller, pl_correct, pl_correct_slmzern, pl_turb_correct
 
 sys.path.append(r"/home/lab/libSEAL")
 from wfAffectors import SLM, DM_seal

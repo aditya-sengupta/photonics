@@ -4,7 +4,7 @@ import imageio.v3 as iio
 import os, sys
 
 from collections import Counter
-from matplotlib import pyplot as plt
+import matplotlib.pyplot as plt
 from scipy.stats import linregress
 from scipy.signal import find_peaks
 from tqdm import tqdm, trange

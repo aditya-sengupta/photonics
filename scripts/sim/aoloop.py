@@ -3,7 +3,7 @@ import numpy as np
 import hcipy
 from tqdm import trange
 
-from matplotlib import pyplot as plt
+import matplotlib.pyplot as plt
 from matplotlib import animation
 from hcipy import imshow_field
 from IPython.display import HTML

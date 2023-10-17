@@ -1,6 +1,6 @@
 import numpy as np
 from tqdm import tqdm, trange
-from matplotlib import pyplot as plt
+import matplotlib.pyplot as plt
 
 from .utils import *
 
