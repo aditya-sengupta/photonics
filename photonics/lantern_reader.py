@@ -197,7 +197,7 @@ class LanternReader:
         plt.title("Saturation map")
         plt.show()
 
-    def saturating_ports(self, img):
+    def peaks_per_port(self, img):
         r = self.fwhm
         max_vals = []
         # TODO don't repeat the coordinate calculation each time
@@ -209,8 +209,11 @@ class LanternReader:
                 lower_x:upper_x
             ]
             max_vals.append(np.max(masked))
+        
+        return np.array(max_vals)
 
-        return np.array(max_vals) > self.saturation
+    def saturating_ports(self, img):
+        return np.array(self.peaks_per_port(img)) > self.saturation
 
     def plot_saturating_ports(self, img):
         port_booleans = self.saturating_ports(img)
