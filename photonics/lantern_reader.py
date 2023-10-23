@@ -85,7 +85,7 @@ class LanternReader:
         if len(xc) != self.nports:
             warnings.warn(f"should have found {self.nports} ports but found {len(xc)}")
             self.save_intensities = False
-        refined_locs = np.vstack((xc, yc)).T
+        refined_locs = np.vstack((np.round(xc), np.round(yc))).T
 
         """# COM refinement
         refined_locs = []
@@ -167,7 +167,7 @@ class LanternReader:
         for i in range(self.nports - len(exclude)):
             while j in exclude:
                 j += 1
-            intensities[i] = np.average(img[np.where((self.xi - self.xc[j]) ** 2 + (self.yi - self.yc[j]) ** 2 <= self.fwhm ** 2)])
+            intensities[i] = np.sum(img[np.where((self.xi - self.xc[j]) ** 2 + (self.yi - self.yc[j]) ** 2 <= self.fwhm ** 2)])
             j += 1
 
         return intensities
