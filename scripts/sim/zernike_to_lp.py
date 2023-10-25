@@ -78,6 +78,6 @@ def plot_coupling_for_zernike(zernike, amplitude):
     print(np.sum(np.abs(projection ** 2)) / np.sum(focal_wf.intensity))
 
 # %%
-plot_coupling_for_zernike(2, 0.5)
+plot_coupling_for_zernike(6, 0.5)
 
 # %%

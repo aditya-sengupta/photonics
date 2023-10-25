@@ -57,7 +57,7 @@ module PhotonicLantern
 
     function nanify(x)
         xs = copy(x)
-        for idx in findall(xs .== 0)
+        for idx in findall(abs.(xs) .== 0)
             xs[idx] = NaN
         end
         return xs
@@ -65,6 +65,10 @@ module PhotonicLantern
     
     function im_show(x; kwargs...)
         heatmap(nanify(x), aspect_ratio=1, showaxis=false, grid=false, xlim=(0, size(x, 1) + 2), c=:thermal; kwargs...)
+    end
+
+    function im_show!(x; kwargs...)
+        heatmap!(nanify(x), aspect_ratio=1, showaxis=false, grid=false, xlim=(0, size(x, 1) + 2), c=:thermal; kwargs...)
     end
 
     function phasewrap(x)
@@ -75,5 +79,5 @@ module PhotonicLantern
         return v .* (vmax .- vmin) .+ vmin
     end
 
-    export interaction_matrices, quadratic_forward, quadratic_jacobian, lpfield, make_unitary_matrix, is_unitary, sigma_clamp, zero_one_ify, im_show, phasewrap, rescale
+    export interaction_matrices, quadratic_forward, quadratic_jacobian, lpfield, make_unitary_matrix, is_unitary, sigma_clamp, zero_one_ify, im_show, im_show!, phasewrap, rescale
 end # module PhotonicLantern
