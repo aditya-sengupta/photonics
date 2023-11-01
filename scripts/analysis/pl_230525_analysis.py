@@ -1,6 +1,7 @@
 # %%
 import os, sys, re, tqdm
-from matplotlib import pyplot as plt
+import numpy as np
+import matplotlib.pyplot as plt
 sys.path.append("..")
 from photonics.lantern_reader import LanternReader
 

@@ -1,5 +1,12 @@
 from datetime import datetime
 import numpy as np
+import os
+from os import path
+
+PROJECT_ROOT = path.dirname(path.dirname(path.abspath(__file__)))
+DATA_PATH = path.join(PROJECT_ROOT, "data")
+if not os.path.isdir(DATA_PATH):
+    os.mkdir(DATA_PATH)
 
 date_now = lambda: datetime.now().strftime('%Y%m%d')[2:]
 time_now = lambda: datetime.now().strftime('%H%M')

@@ -8,17 +8,12 @@ import os
 from os import path
 from astropy.stats import sigma_clipped_stats
 from math import floor, ceil
-from matplotlib import pyplot as plt
+import matplotlib.pyplot as plt
 from photutils.detection import DAOStarFinder
 from scipy.spatial import ConvexHull
 import warnings
 
-from .utils import date_now, datetime_now, angles_relative_to_center
-
-PROJECT_ROOT = path.dirname(path.dirname(path.abspath(__file__)))
-DATA_PATH = path.join(PROJECT_ROOT, "data")
-if not os.path.isdir(DATA_PATH):
-    os.mkdir(DATA_PATH)
+from .utils import date_now, datetime_now, angles_relative_to_center, PROJECT_ROOT, DATA_PATH
 
 class LanternReader:
     """
@@ -40,6 +35,7 @@ class LanternReader:
             os.mkdir(self.directory)
         print(f"Path for data saving set to {self.directory}")
         self.threshold = threshold
+        self.saturation = 60_000
         self.save_intensities = True # if False, save full images
 
     @property
@@ -89,7 +85,7 @@ class LanternReader:
         if len(xc) != self.nports:
             warnings.warn(f"should have found {self.nports} ports but found {len(xc)}")
             self.save_intensities = False
-        refined_locs = np.vstack((xc, yc)).T
+        refined_locs = np.vstack((np.round(xc), np.round(yc))).T
 
         """# COM refinement
         refined_locs = []
@@ -164,11 +160,15 @@ class LanternReader:
         self.yc = np.append(self.yc, y)
         self.xc, self.yc, self.radial_shell = self.ports_in_radial_order(np.vstack((self.xc, self.yc)).T)
 
-    def get_intensities(self, img):
+    def get_intensities(self, img, exclude=[]):
         mask = np.zeros_like(img)
-        intensities = np.zeros(self.nports)
-        for (i, (xv, yv)) in enumerate(zip(self.xc, self.yc)):
-            intensities[i] = np.average(img[np.where((self.xi - xv) ** 2 + (self.yi - yv) ** 2 <= self.fwhm ** 2)])
+        intensities = np.zeros(self.nports - len(exclude))
+        j = 0
+        for i in range(self.nports - len(exclude)):
+            while j in exclude:
+                j += 1
+            intensities[i] = np.sum(img[np.where((self.xi - self.xc[j]) ** 2 + (self.yi - self.yc[j]) ** 2 <= self.fwhm ** 2)])
+            j += 1
 
         return intensities
 
@@ -193,6 +193,28 @@ class LanternReader:
         np.save(self.filepath(fname, ext=ext), data)
 
     def saturation_map(self, img):
-        plt.imshow(img >= 65535)
+        plt.imshow(img >= self.saturation)
         plt.title("Saturation map")
         plt.show()
+
+    def peaks_per_port(self, img):
+        r = self.fwhm
+        max_vals = []
+        # TODO don't repeat the coordinate calculation each time
+        for (x, y) in zip(self.xc, self.yc):
+            lower_x, upper_x = int(np.floor(x - r)), int(np.ceil(x + r))
+            lower_y, upper_y = int(np.floor(y - r)), int(np.ceil(y + r))
+            masked = img[
+                lower_y:upper_y,
+                lower_x:upper_x
+            ]
+            max_vals.append(np.max(masked))
+        
+        return np.array(max_vals)
+
+    def saturating_ports(self, img):
+        return np.array(self.peaks_per_port(img)) > self.saturation
+
+    def plot_saturating_ports(self, img):
+        port_booleans = self.saturating_ports(img)
+        return self.reconstruct_image(img, port_booleans)

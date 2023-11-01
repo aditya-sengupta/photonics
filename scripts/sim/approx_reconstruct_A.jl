@@ -51,7 +51,7 @@ function reconstruct_row(basis_outputs, test_inputs, test_outputs)
     return abs_A .* exp.(1im * recon_phases)'
 end
 
-function test_matrix_recon(Nports=18, Nmodes=5)
+function test_matrix_recon(;Nports=18, Nmodes=5)
     A = make_unitary_matrix(Nports)[:,1:Nmodes]
     A_recon = zeros(ComplexF64, size(A))
     for r in 1:Nports

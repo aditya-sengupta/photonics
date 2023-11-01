@@ -63,7 +63,7 @@ begin
         vspan!([amps[linear_start], amps[linear_end]], alpha=0.2)
         push!(pl, pk)
     end
-    p = plot(pl..., legend=nothing, size=(750,500), dpi=200, layout=(2, 3), xlim=(-1.5, 1.5), ylim=(-1.5, 1.5))
+    p = plot(pl..., legend=nothing, size=(750,500), dpi=200, layout=(2, 3), xlim=(-0.2, 0.2), ylim=(-0.2, 0.2))
     Plots.savefig("figures/linear_with_axes_230714.png")
     p
 end

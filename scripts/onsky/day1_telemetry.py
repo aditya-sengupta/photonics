@@ -3,7 +3,7 @@ import numpy as np
 import imageio.v3 as iio
 import os, sys, re
 
-from matplotlib import pyplot as plt
+import matplotlib.pyplot as plt
 from astropy.io import fits
 # %%
 d = fits.getdata("../data/pl_230602/Telemetry--UCOLick_2023-06-02/Data_0137.fits")

@@ -31,7 +31,10 @@
 # Need help? Check out our forum at: https://teledynevisionsolutions.zendesk.com/hc/en-us/community/topics
 
 import os
-import PySpin
+try:
+    import PySpin
+except ModuleNotFoundError:
+    pass
 import sys
 import numpy as np
 
