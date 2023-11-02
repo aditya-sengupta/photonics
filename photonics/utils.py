@@ -12,6 +12,9 @@ date_now = lambda: datetime.now().strftime('%Y%m%d')[2:]
 time_now = lambda: datetime.now().strftime('%H%M')
 datetime_now = lambda: date_now() + "_" + time_now()
 
+def rms(x):
+    return np.sqrt(np.sum(x ** 2))
+
 def datetime_ms_now():
     dt = datetime.now()
     return dt.strftime('%Y%m%d')[2:] + "_" + dt.strftime('%H%M%S') + "_" + str(dt.microsecond)

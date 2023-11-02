@@ -13,7 +13,7 @@ import warnings
 
 from .flir import configure_trigger, acquire_image, reset_trigger
 from .lantern_reader import LanternReader
-from .utils import datetime_ms_now, time_ms_now
+from .utils import datetime_ms_now, time_ms_now, rms
 
 def save_telemetry(wait=0):
     warnings.warn("If you see this and you're at Lick, uncommand the line starting with subprocess.run")
@@ -55,6 +55,13 @@ class ShaneLantern:
         del self.cam
         self.cam_list.Clear()
         self.system.ReleaseInstance()
+
+    def get_exp(self):
+        pass 
+
+    def set_exp(self, texp):
+        warnings.warn("texp is in microseconds!")
+        self.cam.ExposureTime.SetValue(int(texp))
 
     def zern_to_dm(self, z, amp):
         assert type(z) == int, "first argument must be an integer (Zernike number)"
@@ -99,7 +106,7 @@ class ShaneLantern:
         if self.reader.save_intensities:
             return self.reader.get_intensities(img)
         else:
-            return img
+            return self.reader.crop_to_bounding_box(img)
 
     def experiment(self, patterns):
         start_stamp = datetime_ms_now()
@@ -121,6 +128,38 @@ class ShaneLantern:
         self.reader.save(f"dmc_{start_stamp}", patterns, verbose=False)
         self.reader.save(f"timestamps_{start_stamp}", np.array(time_stamps), verbose=False)
         self.reader.save(f"pl_{start_stamp}", l, verbose=False)
+
+    def make_interaction_matrix(self, amp_calib=0.05):
+        self.int_mat = np.zeros((self.reader.nports, self.Nmodes))
+        for i in trange(self.Nmodes):
+            self.zern_to_dm(i + 1, amp_calib)
+            time.sleep(0.1)
+            # don't go through try_intensities for this
+            # i never want to do calibration on a full-frame lantern image
+            s_push = self.reader.get_intensities(self.get_image())
+            self.zern_to_dm(i + 1, -amp_calib)
+            time.sleep(0.1)
+            s_pull = self.reader.get_intensities(self.get_image())
+            s = (s_push - s_pull) / (2 * amp_calib)
+            self.int_mat[:,i] = s.ravel()
+        
+        self.send_zeros()
+        self.compute_command_matrix()
+
+    def compute_command_matrix(self, thres=1/30):
+        self.cmd_mat = np.linalg.pinv(self.int_mat, thres)
+
+    def pseudo_cl_iteration(self, gain=0.1):
+        # too experimental to put in loops and stuff!
+        # if this ends up working, just loop it together with saving frames and stuff manually
+        print(f"Initial error = {rms(self.curr_dmc)}")
+        lantern_reading = self.cmd_mat @ self.reader.get_intensities(self.get_image())
+        # does the sign of measured WF errors match the actual signs?
+        sign_match = ''.join(map(lambda x: str(int(x)), (np.sign(lantern_reading * self.curr_dmc) * 2 + 2)/4))
+        print(f"{sign_match}")
+        self.curr_dmc -= gain * lantern_reading
+        self.command_to_dm()
+        print(f"Final error = {rms(self.curr_dmc)}")
 
     # different types of experiment
     def sweep_mode(self, z, min_amp=-1.0, max_amp=1.0, step=0.1, prompt=False):
