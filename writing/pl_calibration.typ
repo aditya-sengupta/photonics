@@ -1,7 +1,7 @@
 #import "template.typ": *
 
 #show: project.with(
-  title: "Laboratory experiments with photonic lanterns",
+  title: "The photonic lantern: simulations and SEAL",
   authors: (
     "Aditya Sengupta",
   ),
@@ -9,7 +9,77 @@
 
 #set cite(brackets: false)
 
+#outline()
+
+= Wavefront sensing and science imaging with optical fibers
+
+== The adaptive optics context
+Adaptive optics (AO) systems, which correct atmospheric aberrations in astronomical images in real time, require wavefront sensors. These are devices that measure the type, direction, and magnitude of the aberrations to be corrected in the incoming light. Extreme AO systems, i.e. ones working with high contrast and high spatial resolution, often run into limitations due to their wavefront sensors not being on a "common path" with their science camera: optics downstream from the wavefront sensor may induce aberrations that cannot be sensed or corrected. _Focal-plane wavefront sensing_ refers to a set of techniques that address this by obtaining wavefront information after a science image has been formed. However, wavefront sensing involves identifying the phase of light, whereas only intensities are available to a camera at the focal plane. Optical fibers offer us a way to create phase-dependent intensity patterns that still preserve the science image, so that wavefront sensing and science imaging can be done simultaneously.
+
+== Fiber wavefront sensing: ray optics
+#figure(
+  image("acceptance_cone.png"),
+  caption: [Light propagation in an optical fiber at various different entrance angles. We see there's a critical angle past which input light refracts through the cladding and is not visible at the other end of the fiber. From thorlabs.com.],
+  placement: top
+)
+Looking at ray optics, fibers work on the principle of total internal reflection. We consider a cylindrical core of high refractive index surrounded by a cladding of lower refractive index (a step-index fiber), and consider light rays coming in slightly off-axis. The rays are incident at a relatively shallow angle, and they are bent away from their direction of propagation back into the core, so there is no component that refracts out into the cladding. If we inject light at one end of a sufficiently small fiber and look at the light at the other end, we see light that comes in at a sufficiently shallow angle (or a small beam size), and we don't see light that comes in at larger angles. 
+
+The numerical aperture of a step-index fiber is set by the refractive indices of the cladding and core:
+
+$ "NA" = sqrt(n_"core"^2 - n_"clad"^2) = n_"surroundings" sin theta_"max". $
+
+This is good for a science camera, but it means a small optical fiber is blind to most wavefront aberrations. For example, tip-tilt aberrations (where the PSF moves in $x-y$ space but keeps its shape otherwise) would result in imperfect coupling between the PSF#footnote("PSF = point spread function; the shape naturally formed by an imaging system. In the EE systems context, it's the telescope's impulse response.") and the fiber input, and would be seen as reduced throughput at the other end. We wouldn't know anything about the direction of the coupling mismatch, so there would be no wavefront information.
+
+To accommodate this, we can widen the fiber to $tilde$several times the beam size, allowing it to accept more off-axis light; now, unless the aberrations are so large that the PSF is steered off the fiber entirely, an aberrated PSF will still produce a signal. Light rays that are significantly off-axis come in at a sharper angle, so they also get reflected back into the core at a sharper angle, and they bounce off the core-cladding interface more times per length of fiber than the on-axis light. This is moving us closer to a wavefront sensor, because we have off-axis light doing something qualitatively different from on-axis light.
+
+== Fiber wavefront sensing: wave optics
+#figure(
+  image("mmf_smf.jpeg"),
+  caption: [The visible output of a multi-mode and a single-mode fiber. In the multi-mode case, we see a mixture of shapes forming an incoherent pattern, whereas the single-mode case has a simpler, Gaussian-like profile. From http://labman.phys.utk.edu/phys222core/modules/m7/optical-fibers.html.],
+  placement: auto
+)
+In the wave optics picture, each one of these allowed paths for a ray of light corresponds to a _mode_: a shape that the electric field can take that is left unchanged by the fiber. Consider a fiber whose direction of propagation is $+z$ and whose cross-section is in the $x-y$ plane. The shape of the cross-section gives rise to a set of modes $E_m (x, y)$, and as they propagate along the fiber, their intensity remains unchanged but their phase continuously shifts. We can model the total electric field in a fiber as a sum of these components:
+
+$ E(x, y, z) = sum_(m = 1)^(N_"modes") E_m (x, y) exp(-i beta_m z). $
+
+Here, $beta_m$ describes how far along the fiber we have to travel until the mode goes through a full $2pi$ phase shift.
+
+We can split these modes into _guided modes_, which are confined to the core, and _radiative modes_, which aren't. We can also have modes that are confined to the cladding but not the core, but for our purposes here we can neglect this. Mathematically, we can understand guided modes as ones in which $beta_m$ has a zero or negligible imaginary component, and radiative modes as ones in which this doesn't hold. There's a finite number of guided modes and an infinite number of radiative modes. Since we're considering a setting where light in each mode goes through many oscillations (a fiber that's $tilde$centimeters long relative to a $tilde$microns wide cross-section), we can neglect the radiative modes. 
+
+The first mode is known as the _fundamental mode_, and it has a Gaussian-like profile. Higher order modes make increasingly more spatially-varying patterns across the core cross-section, until at some point they leak out of the core. The number of guided modes for a step-index fiber isn't exactly knowable without numerical simulations, but an approximate value is given by $M approx V^2 / 2$, where $V$ is the _normalized frequency parameter_
+
+$ V = (2 pi) / lambda a sqrt(n_"core"^2 - n_"cladding"^2). $
+
+where $a$ is the core radius. When $V <= 2.405$, we only have the fundamental mode. $V$ also sets the numerical aperture in the multi-mode case:
+
+$ "NA" = lambda / (2 pi a n_"surroundings") V. $
+
+This shows us that a multi-mode fiber may be useful as a wavefront sensor: if we can find some way of describing aberrations in the AO context in terms of guided modes, we'll be able to frame the wavefront sensing problem in terms of the physics of the fiber. However, the output patterns of a multi-mode fiber are hard to use as a signal for wavefront sensing or as an unaberrated science image.
+
+== The photonic lantern
+ We'd like some way of encoding wavefront information while keeping the beam shape intact. This gives rise to the _photonic lantern_: a waveguide that transitions from a multi-mode fiber at the input end to a bundle of single-mode fibers at the output end. Different combinations of modes in the multi-mode fiber component get mapped into variations between the ports at the single-mode fiber end, so we preserve the original science image in each port while using these relative intensities as a wavefront sensing signal.
+
+ #figure(
+  image("lin_pl.png"),
+  caption: [Cross-sectional schematics of the photonic lantern, showing a multimode fiber at the input end and a bundle of single-mode fibers at the output end. Adapted from @Lin2022.],
+  placement: bottom
+ )
+
+ Although this is a promising method, it has inherent limitations. Since we can only sense aberrations that couple into the fiber, we need to have a significantly larger fiber than the input beam, but we previously saw that the number of modes scales with the fiber radius squared. This means we have a tradeoff: if we want to be sensitive to high-amplitude aberrations, we have to accept many more input modes, which may mean degeneracies in the response as we have the same number of outputs to sense more inputs. Usable photonic lanterns therefore have a relatively small dynamic range and a limitation on the spatial frequency of wavefront modes it can sense. This makes them suitable as a second-stage wavefront sensor. If upstream adaptive optics correct large-amplitude aberrations, the photonic lantern can then handle the small-amplitude, small-spatial-frequency aberrations with no non-common-path aberrations.
+
+ My objective is to assess the photonic lantern as a wavefront sensor, using a combination of numerical simulations, lab testing, and on-sky testing. In particular, I'm interested in:
+
+ - how do we best convert intensities measured at the output end back into components of phase at the input end?
+ - how can we vary the photonic lantern's design parameters (the number, size, and position of ports, the size of the input end, the taper length, and the refractive indices) for optimal performance both as a wavefront sensor and as a science camera?
+ - to what extent does wavelength information remain intact through the lantern, and can we use this for wavefront sensing as well?
+ -  in what configuration of other instruments would we get the best performance out of a photonic lantern as a wavefront sensor?
+
 = What do we want to do with a photonic lantern in the lab?
+
+Using SEAL, we're able to evaluate the wavefront sensing performance of the photonic lantern. There are several choices to play around with:
+
+1. How do we measure and calibrate intensities off an image of the output end of the lantern?
+2. What 
 
 At the moment, I'm interested in
 

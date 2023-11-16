@@ -1,7 +1,7 @@
 import numpy as np
 import sys
 from time import sleep
-from photonics import LanternReader, date_now, pl_correct, pl_correct_slmzern, pl_turb_correct
+from photonics import LanternReader, date_now, pl_correct, pl_turb_correct
 
 sys.path.append(r"/home/lab/libSEAL")
 from wfAffectors import SLM, DM_seal
@@ -19,17 +19,21 @@ reader = LanternReader(
     subdir="pl_" + date_now()
 )
 
-slm = SLM()
-dm_slm = DM_seal('slm',slm,[5,0.5])
-
 c = blackFly_camera("PhotoL.sh")
 sleep(3)
-input("Taking a dark frame, turn off the laser.")
-c.getDark()
-input("Turn on the laser and adjust power until most ports are not saturated.")
+input("Adjust power until most ports are not saturated.")
 plwfs = PhotonicLantern(c, reader)
 plwfs.reader.xc = np.round(plwfs.reader.xc)
 plwfs.reader.yc = np.round(plwfs.reader.yc)
-plwfs.reader.fwhm = 9
+plwfs.reader.fwhm = 6
 
-# turb = atm(1.5, 635e-9, 0.75, 5, 40, 1e-3, slm)
+c.nFrames = 100
+
+c.set_exp(40)
+input("Taking a dark frame, turn off the laser.")
+c.getDark()
+input("Turn on the laser.")
+
+def linearity_mems(dm):
+    plwfs.update_flat(dm)
+    return plwfs.linearity(dm, modes_number=10, amp_calib=0.02, lim=0.05, step=0.01)

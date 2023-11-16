@@ -30,7 +30,7 @@ class ShaneLantern:
         self.reader = reader
         self.Nmodes = Nmodes
         self.curr_dmc = np.zeros(Nmodes)
-        self.initialize_camera()
+        # self.initialize_camera()
 
     def initialize_camera(self):
         self.cam = None
@@ -76,9 +76,9 @@ class ShaneLantern:
         command = ",".join(map(str, self.curr_dmc))
         if verbose:
             print(f"DMC {command}.")
-        warnings.warn("If you see this and you're at Lick, uncomment the lines defining and running shell_command.")
-        # shell_command = ["ssh", "-Y", "gavel@shade.ucolick.org", "local/bin/imageSharpen", "-s", command]
-        # subprocess.run(shell_command)
+        # warnings.warn("If you see this and you're at Lick, uncomment the lines defining and running shell_command.")
+        shell_command = ["ssh", "-Y", "gavel@shade.ucolick.org", "local/bin/imageSharpen", "-s", command]
+        subprocess.run(shell_command)
 
     def get_image(self, verbose=True):
         """
@@ -104,28 +104,32 @@ class ShaneLantern:
     def experiment(self, patterns):
         start_stamp = datetime_ms_now()
         self.send_zeros(verbose=False)
-        img = self.get_image(verbose=False)
+        self.probe_signal()
+       # img = self.get_image(verbose=False)
         time_stamps = []
-        if self.reader.save_intensities:
+        """if self.reader.save_intensities:
             l = np.zeros((len(patterns), self.reader.nports))
         else:
-            l = np.zeros((len(patterns), *self.reader.imgshape))
+            l = np.zeros((len(patterns), *self.reader.imgshape))"""
         for (i, p) in enumerate(tqdm(patterns)):
             time_stamps.append(time_ms_now())
             self.curr_dmc = p
             self.command_to_dm(verbose=False)
-            img = self.get_image(verbose=False)
-            l[i] = self.try_intensities(img)
+            sleep(1.0)
+            #img = self.get_image(verbose=False)
+            #l[i] = self.try_intensities(img)
         
+        self.probe_signal()
         self.send_zeros(verbose=False)
-        self.reader.save(f"dmc_{start_stamp}", patterns, verbose=False)
-        self.reader.save(f"timestamps_{start_stamp}", np.array(time_stamps), verbose=False)
-        self.reader.save(f"pl_{start_stamp}", l, verbose=False)
+        np.save(f"./data/pl_231102/dmc_{start_stamp}", patterns)
+        np.save(f"./data/pl_231102/timestamps_{start_stamp}", np.array(time_stamps))
+        # self.reader.save(f"pl_{start_stamp}", l, verbose=False)
 
     # different types of experiment
     def sweep_mode(self, z, min_amp=-1.0, max_amp=1.0, step=0.1, prompt=False):
         amps = np.arange(min_amp, max_amp+step, step)
         patterns = np.zeros((len(amps), self.Nmodes))
+        patterns[:,z-1] = amps
         self.experiment(patterns)
 
     def sweep_all_modes(self, **kwargs):
@@ -142,10 +146,12 @@ class ShaneLantern:
         self.experiment(patterns)
 
     def probe_signal(self, wait=0):
-        probe = np.zeros((1, self.Nmodes))
+        probe = np.zeros_like(self.curr_dmc)
         k = 0 # change this one to vary the mode of the probe signal
-        probe[0,k] = 0.9 # change this one to vary the amplitude of the probe signal
-        self.experiment(probe)
+        probe[k] = 0.9 # change this one to vary the amplitude of the probe signal
+        self.curr_dmc = probe
+        self.command_to_dm()
+        self.send_zeros()
 
     def random_combinations(self, Niters, lim=1.0):
         inputzs = np.random.uniform(-lim, lim, (Niters, self.Nmodes))

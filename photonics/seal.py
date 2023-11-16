@@ -51,7 +51,8 @@ def closeloop_slm(plwfs, slm, dm_slm, amp=None, gain=0.1, lim=0.05, nmodes=10, n
         print(f"Lantern improvement {lant_improvement}")
     return amp, recons, curr_slm, improvement
 
-def pl_correct(plwfs, dm, controller, amp, zern, niter=10):
+def pl_correct(plwfs, dm, amp, zern, niter=10):
+    controller = integrator(plwfs, dm)
     plwfs.update_flat(dm)
     true_flat = np.copy(dm.flat_surf)
     dm.newFlat(dm.pokeZernike(amp, zern))
