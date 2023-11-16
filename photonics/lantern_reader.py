@@ -76,6 +76,7 @@ class LanternReader:
             imgc[ind[0]-s:ind[0]+s,ind[1]-s:ind[1]+s] = 0
             i += 1
         """
+        self.imgshape = img.shape
         mean, median, std = sigma_clipped_stats(img, sigma=10.0)
         daofind = DAOStarFinder(fwhm=self.fwhm, threshold=self.threshold*std) 
         # fwhm tuned to the port sizes
@@ -138,7 +139,7 @@ class LanternReader:
     def bounding_box(self, pad=5):
         return (floor(min(self.xc)-pad), ceil(max(self.xc)+pad), floor(min(self.yc)-pad), ceil(max(self.yc)+pad))
 
-    def crop_to_bounding_box(self, img, savename=None, pad=5):
+    def crop_to_bounding_box(self, img, savename=None, pad=15):
         bbox = self.bounding_box(pad=pad)
         if len(img.shape) == 3:
             crop_img = img[:,bbox[2]:bbox[3], bbox[0]:bbox[1]]
