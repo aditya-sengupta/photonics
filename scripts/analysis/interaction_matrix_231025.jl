@@ -52,7 +52,7 @@ end
 begin
     nmodes = 6
     pl = []
-    for k in 2:(nmodes+1)
+    for (k, name) in zip(2:(nmodes+1), ["x-tilt", "y-tilt", "focus", "astig", "astig45", "tricoma"])
         lin_k = ((p_i_all[k-1,:,:]) * iA)[:,1:nmodes]
         a = [(k == i ? 1 : 0.2) for i in 2:(nmodes+1)]'
         slope = (lin_k[r,k-1] - lin_k[l,k-1]) / (2 * push_ref)
@@ -61,16 +61,28 @@ begin
         linear_start = findfirst(deviation .< 0.25)
         linear_end = findlast(deviation .< 0.25)
         lr = amps[linear_end] - amps[linear_start]
-        pk = plot(xlabel="z$(k), $(round(lr, digits=3)) rad", label=nothing, legend=:outertopright)
-        plot!(amps, lin_k, alpha=a)
-        plot!(amps, amps * slope, ls=:dash, color=:black)
-        vspan!([amps[linear_start], amps[linear_end]], alpha=0.2)
+        pk = plot(xlabel=name, label=nothing, legend=:outertopright)
+        plot!(amps, lin_k[:,[1, 2, 3, k-1]], alpha=a[:,[1,2,3,k-1]], c=[1 2 3 k-1])
+        plot!(amps, amps, ls=:dash, color=:black)
+        # vspan!([amps[linear_start], amps[linear_end]], alpha=0.2)
         push!(pl, pk)
     end
-    p = plot(pl..., legend=nothing, size=(750,500), dpi=200, layout=(2, 3), xlim=(-0.2, 0.2), ylim=(-0.2, 0.2))
+    p = plot(pl..., legend=nothing, size=(750,500), dpi=200, layout=(2, 3), suptitle="There's a lot more tip-tilt cross-talk than higher orders")
     Plots.savefig("figures/linear_with_axes_231012.png")
     p
 end
 
-
-
+begin
+    nmodes = 6
+    pl = []
+    for (k, name) in zip(2:(nmodes+1), ["x-tilt", "y-tilt", "focus", "astig", "astig45", "tricoma"])
+        lin_k = ((p_i_all[k-1,:,:]) * iA)[:,1:nmodes]
+        lin_k_primary = lin_k[:,k-1]
+        pk = plot(xlabel=name, label=nothing, legend=:outertopright)
+        plot!(amps, abs.(lin_k[:,[1, 2, 3, k-1]] ./ lin_k[:,k-1]), c=[1 :blue 2 3])
+        push!(pl, pk)
+    end
+    p = plot(pl..., legend=nothing, size=(750,500), dpi=200, layout=(2, 3), suptitle="There's a lot more tip-tilt cross-talk than higher orders")
+    Plots.savefig("figures/tt_crosstalk_231012.png")
+    p
+end

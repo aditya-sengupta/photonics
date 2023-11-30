@@ -46,15 +46,14 @@ mesh = RectMesh3D(
 
 lant = make_lant6_saval(offset0, rcore, rclad, 0, mesh.zw, (ncore, nclad, njack), final_scale=scale)
 lant.set_sampling(mesh.xy)
+out = np.zeros(mesh.xy.shape)
+lant.set_IORsq(out,10000)
+plt.imshow(out,vmin=njack*njack,vmax=ncore*ncore)
+plt.show()
 
 # %%
 def binarize(a):
     return np.divide(a, a, out=np.zeros_like(a), where=a!=0)
-# %%
-out = np.zeros(mesh.xy.shape)
-lant.set_IORsq(out,0)
-#plt.imshow(out,vmin=njack*njack,vmax=ncore*ncore)
-#plt.show()
 
 # %%
 prop = Prop3D(wl0 = wl, mesh = mesh, optical_system = lant, n0 = nclad)
@@ -105,8 +104,10 @@ def plot_zernike_prop(zern, ampl):
     aberration = np.exp(1j * ampl * phase)
     wf = Wavefront(aberration, wavelength=prop.wl0*1e-6)
     u_in = np.array(fprop(wf).electric_field.shaped)
+    print(u_in.shape, prop.mesh.xg.shape)
     d = int((xg.shape[0] - 2 * s) // 2)
     u_in = normalize(np.pad(u_in, ((d, d), (d, d))) * mask)
+    print(u_in.shape)
     u_out = prop.prop2end(u_in, remesh_every=0)
     fig, axs = plt.subplots(1, 2)
     for ax in axs:
@@ -131,7 +132,7 @@ def plot_lp_prop(l, m):
     axs[1].set_title("LP lantern output")
 
 # %%
-#plot_zernike_prop(3, 0.6)
+plot_zernike_prop(3, 0.6)
 
 # %%
 #plot_zernike_prop(5, 1.0)
@@ -166,13 +167,16 @@ if __name__ == "__main__":
         wf = Wavefront(aberration, wavelength=prop.wl0)
         u_inz = np.array(fprop(wf).electric_field.shaped)
         u_inz = normalize(np.pad(u_inz, ((d, d), (d, d))) * mask)
-        input_fields.append(u_inz)
+        # input_fields.append(u_inz)
+        prop_and_save(u_inz, zern, ampl)
 
     # %%
-    Parallel(n_jobs=10)(delayed(prop_and_save)(u, z, a) for u, (z, a) in zip(input_fields, product(zerns, ampls)))
+    # Parallel(n_jobs=10)(delayed(prop_and_save)(u, z, a) for u, (z, a) in zip(input_fields, product(zerns, ampls)))
 
-zerns = [1, 2, 3, 4, 5]
-ampls = np.linspace(-1, 1, 21)
+        zerns = [1, 2, 3, 4, 5]
+        ampls = np.linspace(-1, 1, 21)
 
-Parallel(n_jobs=1)(delayed(save_for_zampl)(z, a, save=False, verbose=False, r=trange) for z, a in product(zerns, ampls))
+        Parallel(n_jobs=1)(delayed(save_for_zampl)(z, a, save=False, verbose=False, r=trange) for z, a in product(zerns, ampls))
+        # %%
+        save = _
 # %%

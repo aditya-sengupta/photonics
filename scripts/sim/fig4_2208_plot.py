@@ -1,5 +1,6 @@
 # %%
 from fig4_2208_config import *
+from matplotlib import pyplot as plt
 from lightbeam.misc import norm_nonu, overlap_nonu
 from tqdm import tqdm
 from os.path import join

@@ -1,17 +1,13 @@
 from modulefinder import Module
 import subprocess
 import numpy as np
-try:
-	import PySpin
-except ModuleNotFoundError:
-	pass
+import dao
 from astropy.io import fits
 from functools import reduce
 from time import sleep, time
 from tqdm import tqdm, trange
 import warnings
 
-from .flir import configure_trigger, acquire_image, reset_trigger
 from .lantern_reader import LanternReader
 from .utils import datetime_ms_now, time_ms_now, rms
 
@@ -26,42 +22,32 @@ def save_telemetry(wait=0):
 	"""
 
 class ShaneLantern:
-    def __init__(self, reader, Nmodes=12):
-        self.reader = reader
-        self.Nmodes = Nmodes
-        self.curr_dmc = np.zeros(Nmodes)
-        # self.initialize_camera()
-
-	def initialize_camera(self):
-		self.cam = None
-		self.system = PySpin.System.GetInstance()
-		self.cam_list = self.system.GetCameras()
-		self.num_cameras = self.cam_list.GetSize()
-		print(f"Num detected = {self.num_cameras}")
-		if self.num_cameras != 1:
-			self.deinitialize_camera()
-			print(f'Found {self.num_cameras} cameras where 1 was expected; aborting.')
-			return
-
-		self.cam = self.cam_list[0]
-		print(f"self.cam = {self.cam}")
-		self.nodemap_tldevice = self.cam.GetTLDeviceNodeMap()
-		self.cam.Init()
-		self.nodemap = self.cam.GetNodeMap()
-		
-	def deinitialize_camera(self):
-		if self.cam is not None:
-			self.cam.DeInit()
-		del self.cam
-		self.cam_list.Clear()
-		self.system.ReleaseInstance()
+	def __init__(self, reader, Nmodes=12):
+		self.reader = reader
+		self.Nmodes = Nmodes
+		self.curr_dmc = np.zeros(Nmodes)
+		self.im = dao.shm('/tmp/testShm.im.shm', np.zeros((520, 656)).astype(np.uint16))
+		self.dit = dao.shm('/tmp/testShmDit.im.shm', np.zeros((1,1)).astype(np.float32))
+		self.gain = dao.shm('/tmp/testShmGain.im.shm', np.zeros((1,1)).astype(np.float32))
+		self.fps = dao.shm('/tmp/testShmFps.im.shm', np.zeros((1,1)).astype(np.float32))
 
 	def get_exp(self):
-		pass 
+		return self.dit.get_data()
 
 	def set_exp(self, texp):
-		warnings.warn("texp is in microseconds!")
-		self.cam.ExposureTime.SetValue(int(texp))
+		self.dit.set_data(self.dit.get_data() * 0 + texp)
+  
+	def get_gain(self):
+		return self.gain.get_data()
+
+	def set_gain(self, gain):
+		self.gain.set_data(self.dit.get_data() * 0 + gain)
+  
+	def get_fps(self):
+		return self.fps.get_data()
+
+	def set_fps(self, fps):
+		self.fps.set_data(self.fps.get_data() * 0 + fps)
 
 	def zern_to_dm(self, z, amp):
 		assert type(z) == int, "first argument must be an integer (Zernike number)"
@@ -83,18 +69,15 @@ class ShaneLantern:
 		command = ",".join(map(str, self.curr_dmc))
 		if verbose:
 			print(f"DMC {command}.")
-		warnings.warn("If you see this and you're at Lick, uncomment the lines defining and running shell_command.")
-		# shell_command = ["ssh", "-Y", "gavel@shade.ucolick.org", "local/bin/imageSharpen", "-s", command]
-		# subprocess.run(shell_command)
+		# warnings.warn("If you see this and you're at Lick, uncomment the lines defining and running shell_command.")
+		shell_command = ["ssh", "-Y", "gavel@shade.ucolick.org", "local/bin/imageSharpen", "-s", command]
+		subprocess.run(shell_command)
 
-	def get_image(self, verbose=True):
+	def get_image(self):
 		"""
 		Get an image off the lantern camera. 
 		"""
-		configure_trigger(self.cam)
-		img = acquire_image(self.cam, self.nodemap, self.nodemap_tldevice)
-		reset_trigger(self.nodemap)
-		return img
+		return self.im.get_data(check=True)
 
 	def send_zeros(self, verbose=True):
 		self.curr_dmc[:] = 0.0
