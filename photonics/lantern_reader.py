@@ -13,7 +13,7 @@ from photutils.detection import DAOStarFinder
 from scipy.spatial import ConvexHull
 import warnings
 
-from .utils import date_now, datetime_now, angles_relative_to_center, PROJECT_ROOT, DATA_PATH
+from .utils import date_now, datetime_now, angles_relative_to_center, DATA_PATH
 
 class LanternReader:
     """
@@ -162,7 +162,6 @@ class LanternReader:
         self.xc, self.yc, self.radial_shell = self.ports_in_radial_order(np.vstack((self.xc, self.yc)).T)
 
     def get_intensities(self, img, exclude=[]):
-        mask = np.zeros_like(img)
         intensities = np.zeros(self.nports - len(exclude))
         j = 0
         for i in range(self.nports - len(exclude)):

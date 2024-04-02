@@ -1,8 +1,7 @@
 import numpy as np
-from datetime import datetime
-from tqdm import tqdm, trange
+from tqdm import tqdm
 
-from .utils import *
+from .utils import datetime_now, date_now
 
 datapath = f"/home/lab/asengupta/photonics/data/pl_{date_now()}"
 
@@ -25,7 +24,7 @@ def random_testing(dm, cam, reader, N=3, lims=(-0.5,0.5), modes=np.arange(2, 20)
     stamp = datetime_now()
     input_wavefronts = np.random.uniform(low=lims[0], high=lims[1], size=(N,len(modes)))
     np.save(f"{datapath}/inputzs_{stamp}", input_wavefronts)
-    imgshape = cam.get(1).shape
+    # imgshape = cam.get(1).shape
     intensities = np.zeros((N,reader.nports))
     for (i, input_wf) in enumerate(tqdm(input_wavefronts)):
         dm.setFlatSurf()

@@ -3,8 +3,14 @@ using Images
 using ZernikePolynomials
 using PhotonicLantern
 using Plots
+using Plots.PlotMeasures
+using LaTeXStrings
 
 rms(x) = sqrt(sum(x .^ 2))
+
+plot_font = "Computer Modern"
+default(fontfamily=plot_font,
+        linewidth=2, framestyle=:box, label=nothing, grid=false)
 
 λ = 635.0 # nm
 
@@ -25,16 +31,16 @@ heatmap(log10.(psf_before)[m...], c=:grays)
 heatmap(log10.(psf_after)[m...], c=:grays)
 
 begin
-    p = plot(vcat(rms_before, rms_during, rms_after) / (2pi / λ), xlabel="Number of iterations", ylabel="RMS error on the PL (nm)", label=nothing, ylim=(0, 170), title="Correcting a static aberration with the photonic lantern", titlefontsize=13, dpi=800)
+    p = plot(vcat(rms_before, rms_during, rms_after) / (2pi / λ), xlabel="Number of iterations", ylabel="Wavefront error measured on the PL (nm)", label=nothing, ylim=(0, 170), title="Correcting a static aberration with the photonic lantern", titlefontsize=13, dpi=800)
     vspan!([20, 60], color=RGBA(0.76, 1, 0.76, 1), alpha=0.3, label="Loop closed")
     BB1 = bbox(0.01, 0.2, 0.3, 0.3)
-    im_show!(phase_screen_init * (λ / (2pi)), inset=(1, BB1), clim=(-λ/2, λ/2), subplot=2, title="                Initial SLM phase (nm)", titlefontsize=7, ytickfontsize=6)
     BB2 = bbox(0.65, 0.2, 0.3, 0.3)
-    im_show!(phase_screen_final * (λ / (2pi)), inset=(1, BB2), clim=(-λ/2, λ/2), subplot=3, title="Final SLM phase (nm)", titlefontsize=7, background_color_subplot=RGBA(0, 0, 0, 0), background_alpha_subplot=0.0, ytickfontsize=6)
     BB3 = bbox(0.01, 0.6, 0.2, 0.3)
-    heatmap!(log10.(psf_before[m...]), c=:grays, showaxis=false, grid=false, inset=(1, BB3), subplot=4, title="Initial PSF", titlefontsize=7, xlim=(0, length(m[1])), ylim=(0, length(m[2])), legend=nothing, yflip=true)
     BB4 = bbox(0.65, 0.6, 0.2, 0.3)
-    heatmap!(log10.(psf_after[m...]), c=:grays, showaxis=false, grid=false, inset=(1, BB4), subplot=5, title="Final PSF", titlefontsize=7, xlim=(0, length(m[1])), ylim=(0, length(m[2])), legend=nothing, yflip=true)
+    im_show!(phase_screen_init * (λ / (2pi)), inset=(1, BB1), clim=(-λ/2, λ/2), subplot=2, title="Initial phase (nm)", titlefontsize=7, ytickfontsize=6, background_alpha_subplot=0.0, background_color_subplot=RGBA(0, 0, 0, 0), topmargin=-2mm)
+    im_show!(phase_screen_final * (λ / (2pi)), inset=(1, BB2), clim=(-λ/2, λ/2), subplot=3, title="Final phase (nm)", titlefontsize=7, background_color_subplot=RGBA(0, 0, 0, 0), background_alpha_subplot=0.0, ytickfontsize=6, topmargin=-2mm)
+    heatmap!(log10.(psf_before[m...]), c=:grays, showaxis=false, grid=false, inset=(1, BB3), subplot=4, title="Initial image", titlefontsize=7, xlim=(0, length(m[1])), ylim=(0, length(m[2])), legend=nothing, yflip=true, topmargin=-2mm)
+    heatmap!(log10.(psf_after[m...]), c=:grays, showaxis=false, grid=false, inset=(1, BB4), subplot=5, title="Final image", titlefontsize=7, xlim=(0, length(m[1])), ylim=(0, length(m[2])), legend=nothing, yflip=true, topmargin=-2mm)
     Plots.savefig("./figures/seal_static_cl.png")
     p
 end

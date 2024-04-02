@@ -1,0 +1,142 @@
+% $ biblatex auxiliary file $
+% $ biblatex bbl format version 3.2 $
+% Do not modify the above lines!
+%
+% This is an auxiliary file used by the 'biblatex' package.
+% This file may safely be deleted. It will be recreated by
+% biber as required.
+%
+\begingroup
+\makeatletter
+\@ifundefined{ver@biblatex.sty}
+  {\@latex@error
+     {Missing 'biblatex' package}
+     {The bibliography requires the 'biblatex' package.}
+      \aftergroup\endinput}
+  {}
+\endgroup
+
+
+\refsection{0}
+  \datalist[entry]{nyt/global//global/global}
+    \entry{Norris20}{article}{}
+      \name{author}{5}{}{%
+        {{un=0,uniquepart=base,hash=41574bcf0ac38183072604dd0c54417e}{%
+           family={{Norris}},
+           familyi={N\bibinitperiod},
+           given={Barnaby\bibnamedelima R.\bibnamedelimi M.},
+           giveni={B\bibinitperiod\bibinitdelim R\bibinitperiod\bibinitdelim M\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=fdb597e2f4924728c4744dffad4341f0}{%
+           family={{Wei}},
+           familyi={W\bibinitperiod},
+           given={Jin},
+           giveni={J\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=f1bb43d5b03a8ae542a8691be860cc17}{%
+           family={{Betters}},
+           familyi={B\bibinitperiod},
+           given={Christopher\bibnamedelima H.},
+           giveni={C\bibinitperiod\bibinitdelim H\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=45052d980773df0aa27fc4d387cf3329}{%
+           family={{Wong}},
+           familyi={W\bibinitperiod},
+           given={Alison},
+           giveni={A\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=b6432da9eb574b9fb82af96641cf3065}{%
+           family={{Leon-Saval}},
+           familyi={L\bibinitperiod},
+           given={Sergio\bibnamedelima G.},
+           giveni={S\bibinitperiod\bibinitdelim G\bibinitperiod},
+           givenun=0}}%
+      }
+      \strng{namehash}{d4ac5a3940a9e76395c6c65d87506da0}
+      \strng{fullhash}{1b10e1c3d2ae9a07dc5ef7645e6a721c}
+      \strng{bibnamehash}{d4ac5a3940a9e76395c6c65d87506da0}
+      \strng{authorbibnamehash}{d4ac5a3940a9e76395c6c65d87506da0}
+      \strng{authornamehash}{d4ac5a3940a9e76395c6c65d87506da0}
+      \strng{authorfullhash}{1b10e1c3d2ae9a07dc5ef7645e6a721c}
+      \field{sortinit}{N}
+      \field{sortinithash}{22369a73d5f88983a108b63f07f37084}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{eid}{5335}
+      \field{eprintclass}{astro-ph.IM}
+      \field{eprinttype}{arXiv}
+      \field{journaltitle}{Nature Communications}
+      \field{month}{10}
+      \field{title}{{An all-photonic focal-plane wavefront sensor}}
+      \field{volume}{11}
+      \field{year}{2020}
+      \field{pages}{5335}
+      \range{pages}{1}
+      \verb{doi}
+      \verb 10.1038/s41467-020-19117-w
+      \endverb
+      \verb{eprint}
+      \verb 2003.05158
+      \endverb
+      \keyw{Astrophysics - Instrumentation and Methods for Astrophysics}
+    \endentry
+    \entry{Sun20}{article}{}
+      \name{author}{3}{}{%
+        {{un=0,uniquepart=base,hash=62393b4ef0169052b4ada7cbf085cc62}{%
+           family={Sun},
+           familyi={S\bibinitperiod},
+           given={He},
+           giveni={H\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=acab63f7be574ef41292c2875bb120a0}{%
+           family={Kasdin},
+           familyi={K\bibinitperiod},
+           given={N.\bibnamedelimi Jeremy},
+           giveni={N\bibinitperiod\bibinitdelim J\bibinitperiod},
+           givenun=0}}%
+        {{un=0,uniquepart=base,hash=44ee5b1c815a7ac5aedb9895cf68b2d2}{%
+           family={Vanderbei},
+           familyi={V\bibinitperiod},
+           given={Robert},
+           giveni={R\bibinitperiod},
+           givenun=0}}%
+      }
+      \list{publisher}{1}{%
+        {SPIE}%
+      }
+      \strng{namehash}{90ff661c7cfbf645503770e96a9a388c}
+      \strng{fullhash}{90ff661c7cfbf645503770e96a9a388c}
+      \strng{bibnamehash}{90ff661c7cfbf645503770e96a9a388c}
+      \strng{authorbibnamehash}{90ff661c7cfbf645503770e96a9a388c}
+      \strng{authornamehash}{90ff661c7cfbf645503770e96a9a388c}
+      \strng{authorfullhash}{90ff661c7cfbf645503770e96a9a388c}
+      \field{sortinit}{S}
+      \field{sortinithash}{b164b07b29984b41daf1e85279fbc5ab}
+      \field{extradatescope}{labelyear}
+      \field{labeldatesource}{}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{journaltitle}{Journal of Astronomical Telescopes, Instruments, and Systems}
+      \field{number}{1}
+      \field{title}{{Efficient wavefront sensing for space-based adaptive optics}}
+      \field{volume}{6}
+      \field{year}{2020}
+      \field{pages}{019001}
+      \range{pages}{1}
+      \verb{doi}
+      \verb 10.1117/1.JATIS.6.1.019001
+      \endverb
+      \verb{urlraw}
+      \verb https://doi.org/10.1117/1.JATIS.6.1.019001
+      \endverb
+      \verb{url}
+      \verb https://doi.org/10.1117/1.JATIS.6.1.019001
+      \endverb
+      \keyw{adaptive optics,high-contrast imaging,coronagraph,exoplanet,optimal experiment design,Adaptive optics,Wavefront sensors,Cameras,Coronagraphy,Signal to noise ratio,Wavefront aberrations,Sun,Telescopes,Wavefronts,Space telescopes}
+    \endentry
+  \enddatalist
+\endrefsection
+\endinput
+

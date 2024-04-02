@@ -1,0 +1,87 @@
+\documentclass[12pt]{article}
+\usepackage[margin=1in]{geometry}
+
+\usepackage{custom}
+\usepackage[style=authoryear]{biblatex}
+
+\addbibresource{pl.bib}
+
+\title{Everything About Photonic Lanterns \\ (At UCSC)}
+\author{Aditya Sengupta}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+\section{Why do we need PLs?}
+
+\subsection{Adaptive optics systems}
+
+% Mismatch between Airy and Gaussian, 80%
+
+In WFS\&C, aberrations in light are described using the shape of the incoming \textit{wavefront}: a surface of constant phase in the electromagnetic wave of interest. A perfectly flat wavefront passing through an ideal lens would produce an Airy pattern at the lens' focus. However, in reality the wavefront's shape is altered by atmospheric turbulence for ground-based telescopes, and by telescope jitter, optical surface roughness, thermal noise \parencite{Sun20}, and misalignments in a segmented primary mirror for both ground- and space-based telescopes.
+
+WFS\&C systems measure the wavefront using \textit{wavefront sensors}, devices that measure aberrated wavefronts and translate them to a form that can be used to correct the incoming light with a deformable mirror. Science detectors are usually not suitable for wavefront sensing because of the loss of phase information at the focal plane. For instance, an out-of-focus science image contains no information about whether the detector is ``too close" or ``too far" relative to the correct focus position. Further, science integrations are often longer than the timescale of evolving wavefront aberrations. Therefore most WFS\&C systems do not measure wavefronts along the same optical path as is used for science imaging. This results in \textit{non-common-path aberrations} (NCPAs) that are visible only to the final science image: the wavefront sensor does not see and cannot correct them. \textit{Focal-plane wavefront sensors} can use light at the science plane to correct NCPAs and reach higher precision.
+
+\subsection{Focal-plane wavefront sensing}
+
+\subsection{Fiber-fed spectroscopy}
+
+\subsection{The use case for the PL}
+
+The need for wavefront sensing at the focal plane of a spectrograph prompts us to make use of optical fibers, which are often used to feed light into science instruments. When light travels through optical fibers, it creates phase-dependent effects at the focal plane that can be used to construct a wavefront sensor. We observe a superposition of \textit{modes}, or unique shapes the light can take on, corresponding to the paths that rays of light take through the fiber. \textbf{The photonic lantern is a waveguide that separates multi-mode light into distinct observable patterns}, by transmitting light into several narrow single-mode output fibers. The distribution of intensities across the output fibers encodes the shape of wavefront aberrations. This means PLs are suitable as wavefront sensors \parencite{Norris20} and also preserve all the information from the multi-mode end. PLs can be used as a stable input to a fiber-fed spectrograph by designating one port for science and the rest for wavefront sensing, or by designing the science instrument to combine light from all the ports and allow for wavefront sensing on the final image.
+
+The ``fundamental mode'' is seen for any size of fiber and corresponds closely to a Gaussian beam, making it suitable for spectroscopy. Higher-order modes carry information about off-axis aberrated light and could be used for wavefront sensing. However, multi-mode light cannot easily be processed into a useful signal, as all the modes overlap. This makes it difficult to separate out the strength per mode, which would be needed to extract measurements of atmospheric aberration.
+
+\section{Literature review}
+
+
+
+\section{Physics and simulation methods}
+
+\subsection{The ray and wave optics pictures}
+
+\subsection{LP modes and supermodes}
+
+\subsection{Beam propagation method}
+
+\subsection{Eigenmode expansion method}
+
+\section{How to work with PLs in existing AO systems}
+
+\subsection{Connecting PLs to AO loop simulations}
+
+\subsection{The PL as a second-stage wavefront sensor}
+
+\section{Experiments and results}
+
+The UCSC Laboratory for Adaptive Optics acquired a PL from Steve Eikenberry's group at the College of Optics and Photonics (CREOL) at the University of Central Florida in 2021. 
+
+\subsection{Installing and uninstalling the lantern}
+
+\subsection{How to close the loop with the lantern}
+
+\subsection{Varying beam speed}
+
+\subsection{Higher-order reconstructors}
+
+\subsection{Second-stage AO testing}
+
+\section{Testing at ShaneAO}
+
+\subsection{Reports from previous runs}
+
+\subsection{Current experimental setup}
+
+\subsection{Future experimental needs}
+
+\section{Optimizing over photonic lantern designs}
+
+
+
+\section{Coupling into spectrographs}
+
+\printbibliography
+
+\end{document}

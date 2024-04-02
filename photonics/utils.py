@@ -8,9 +8,14 @@ DATA_PATH = path.join(PROJECT_ROOT, "data")
 if not os.path.isdir(DATA_PATH):
     os.mkdir(DATA_PATH)
 
-date_now = lambda: datetime.now().strftime('%Y%m%d')[2:]
-time_now = lambda: datetime.now().strftime('%H%M')
-datetime_now = lambda: date_now() + "_" + time_now()
+def date_now():
+    return datetime.now().strftime("%Y%m%d")[2:]
+
+def time_now():
+    return datetime.now().strftime("%H%M")
+
+def datetime_now():
+    return date_now() + "_" + time_now()
 
 def rms(x):
     return np.sqrt(np.sum(x ** 2))
@@ -23,7 +28,8 @@ def time_ms_now():
     dt = datetime.now()
     return dt.strftime('%H%M%S') + "_" + str(dt.microsecond)
 
-make_fname = lambda n: f"{PROJECT_ROOT}/data/pl_{date_now()}/{n}_{datetime_now()}"
+def make_fname(n):
+    return f"{PROJECT_ROOT}/data/pl_{date_now()}/{n}_{datetime_now()}"
 
 def angles_relative_to_center(x, y):
     xc, yc = np.mean(x), np.mean(y)

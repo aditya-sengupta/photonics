@@ -1,20 +1,21 @@
-from modulefinder import Module
 import subprocess
 import numpy as np
 import dao
-from astropy.io import fits
 from functools import reduce
 from time import sleep, time
 from tqdm import tqdm, trange
 import warnings
+from matplotlib import pyplot as plt
 
-from .lantern_reader import LanternReader
 from .utils import datetime_ms_now, time_ms_now, rms
+
+def normalize(x):
+    return x / np.sum(x)
 
 def save_telemetry(wait=0):
 	warnings.warn("If you see this and you're at Lick, uncommand the line starting with subprocess.run")
 	sleep(wait)
-	"""subprocess.run([
+	"""subprocess.run
 		"ssh", "-Y", 
 		"user@shimmy.ucolick.org", "/opt/kroot/bin/modify",
 		"-s", "saocon", "savedata=1"
@@ -30,6 +31,14 @@ class ShaneLantern:
 		self.dit = dao.shm('/tmp/testShmDit.im.shm', np.zeros((1,1)).astype(np.float32))
 		self.gain = dao.shm('/tmp/testShmGain.im.shm', np.zeros((1,1)).astype(np.float32))
 		self.fps = dao.shm('/tmp/testShmFps.im.shm', np.zeros((1,1)).astype(np.float32))
+  
+	def measure_dark(self):
+		darks = []
+		for _ in trange(10):
+			darks.append(self.im.get_data(check=True).astype(float))
+			sleep(self.dit.get_data()[0][0] / 1e6)
+
+		self.dark = np.mean(darks, axis=0)
 
 	def get_exp(self):
 		return self.dit.get_data()
@@ -49,12 +58,12 @@ class ShaneLantern:
 	def set_fps(self, fps):
 		self.fps.set_data(self.fps.get_data() * 0 + fps)
 
-	def zern_to_dm(self, z, amp):
-		assert type(z) == int, "first argument must be an integer (Zernike number)"
-		assert type(amp) == float, "second argument must be a float (amplitude)"
+	def zern_to_dm(self, z, amp, verbose=True):
+		assert isinstance(z, int), "first argument must be an integer (Zernike number)"
+		assert isinstance(amp, float), "second argument must be a float (amplitude)"
 		self.curr_dmc[:] = 0.0
 		self.curr_dmc[z-1] = amp
-		self.command_to_dm()
+		self.command_to_dm(verbose=verbose)
 
 	def command_to_dm(self, verbose=True):
 		"""
@@ -69,15 +78,16 @@ class ShaneLantern:
 		command = ",".join(map(str, self.curr_dmc))
 		if verbose:
 			print(f"DMC {command}.")
-		# warnings.warn("If you see this and you're at Lick, uncomment the lines defining and running shell_command.")
-		shell_command = ["ssh", "-Y", "gavel@shade.ucolick.org", "local/bin/imageSharpen", "-s", command]
-		subprocess.run(shell_command)
+		warnings.warn("If you see this and you're at Lick, uncomment the lines defining and running shell_command.")
+		# shell_command = ["ssh", "-Y", "gavel@shade.ucolick.org", "local/bin/imageSharpen", "-s", command]
+		# subprocess.run(shell_command)
 
 	def get_image(self):
 		"""
 		Get an image off the lantern camera. 
 		"""
-		return self.im.get_data(check=True)
+		sleep(self.dit.get_data()[0][0] / 1e6)
+		return self.im.get_data(check=True).astype(float) - self.dark
 
 	def send_zeros(self, verbose=True):
 		self.curr_dmc[:] = 0.0
@@ -94,35 +104,36 @@ class ShaneLantern:
 	def experiment(self, patterns):
 		start_stamp = datetime_ms_now()
 		self.send_zeros(verbose=False)
-		img = self.get_image(verbose=False)
+		img = self.get_image()
 		time_stamps = []
 		if self.reader.save_intensities:
-			l = np.zeros((len(patterns), self.reader.nports))
+			pl_readout = np.zeros((len(patterns), self.reader.nports))
 		else:
-			l = np.zeros((len(patterns), *self.reader.imgshape))
+			bbox_shape = self.try_intensities(self.get_image()).shape
+			pl_readout = np.zeros((len(patterns), *bbox_shape))
 		for (i, p) in enumerate(tqdm(patterns)):
 			time_stamps.append(time_ms_now())
 			self.curr_dmc = p
 			self.command_to_dm(verbose=False)
-			img = self.get_image(verbose=False)
-			l[i] = self.try_intensities(img)
+			img = self.get_image()
+			pl_readout[i] = self.try_intensities(img)
 		
 		self.send_zeros(verbose=False)
 		self.reader.save(f"dmc_{start_stamp}", patterns, verbose=False)
 		self.reader.save(f"timestamps_{start_stamp}", np.array(time_stamps), verbose=False)
-		self.reader.save(f"pl_{start_stamp}", l, verbose=False)
+		self.reader.save(f"pl_{start_stamp}", pl_readout, verbose=False)
 
 	def make_interaction_matrix(self, amp_calib=0.05):
 		self.int_mat = np.zeros((self.reader.nports, self.Nmodes))
 		for i in trange(self.Nmodes):
-			self.zern_to_dm(i + 1, amp_calib)
-			time.sleep(0.1)
+			self.zern_to_dm(i + 1, amp_calib, verbose=False)
+			sleep(0.1)
 			# don't go through try_intensities for this
 			# i never want to do calibration on a full-frame lantern image
-			s_push = self.reader.get_intensities(self.get_image())
-			self.zern_to_dm(i + 1, -amp_calib)
-			time.sleep(0.1)
-			s_pull = self.reader.get_intensities(self.get_image())
+			s_push = normalize(self.reader.get_intensities(self.get_image()))
+			self.zern_to_dm(i + 1, -amp_calib, verbose=False)
+			sleep(0.1)
+			s_pull = normalize(self.reader.get_intensities(self.get_image()))
 			s = (s_push - s_pull) / (2 * amp_calib)
 			self.int_mat[:,i] = s.ravel()
 		
@@ -144,7 +155,7 @@ class ShaneLantern:
 			The lower and upper limits on each mode, in DM units.
 		step : float, default
 			The increment used when sweeping through each mode, in DM units.
-		plot : bool, default
+		plot : bool, defaullt
 			Whether or not to plot the result.
 
 		Returns
@@ -160,17 +171,17 @@ class ShaneLantern:
 			nModes = self.Nmodes
 		else:
 			nModes = modes_number
-		amp_range = np.arange(-lim, lim+np.finfo(float).eps, step)
+		amp_range = np.arange(-lim, lim+2*np.finfo(float).eps, step)
 		ref_image = self.get_image()
 		ref_intensities = self.reader.get_intensities(ref_image)
-		responses = np.zeros((nModes, amp_range, len(ref_intensities)))
+		responses = np.zeros((nModes, len(amp_range), len(ref_intensities)))
 		# interpretation: responses[i, j, k] contains the response in mode k to an input in mode i of amplitude amp_range[j].
 		# The range on i is set by the number of modes the user requests.
 		# The range on j is set by the limit and step size the user requests.
 		# The range on k is inherent to the WFS.
 		for i in range(1, nModes+1):
 			for (j, amp) in enumerate(tqdm(amp_range)):
-				self.zern_to_dm(i, amp)
+				self.zern_to_dm(i, float(amp), verbose=False)
 				responses[i - 1, j, :] = self.reader.get_intensities(self.get_image())
 
 		if plot:
@@ -184,6 +195,8 @@ class ShaneLantern:
 					axs[k % nrows, k // nrows].plot(amp_range, responses[i,:,k], alpha=alpha)
 					# axs[k % nrows, k // nrows].set_xlabel(i + 2)
 			plt.show()
+   
+		return amp_range, responses
 
 	def pseudo_cl_iteration(self, gain=0.1):
 		# too experimental to put in loops and stuff!
@@ -235,7 +248,7 @@ class ShaneLantern:
 		while time() - tstart < timeout:
 			try:
 				time_stamps.append(time_ms_now())
-				lantern_images.append(self.get_image(verbose=False))
+				lantern_images.append(self.get_image())
 				warnings.warn("If you see this and you're at Lick, delete the `sleep(0.1)` just below this.")
 				sleep(0.1) # only for testing so I don't get ridiculous numbers of images
 			except KeyboardInterrupt:

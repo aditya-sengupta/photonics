@@ -4,14 +4,14 @@ import matplotlib.pyplot as plt
 
 from scipy.interpolate import griddata
 
-def row_to_list(l, t):
-    l = l.split(",")
-    l[-1] = l[-1][:-1]
-    return list(map(t, l))
+def row_to_list(line, t):
+    line = line.split(",")
+    line[-1] = line[-1][:-1]
+    return list(map(t, line))
 
-def list_to_polars(l):
+def list_to_polars(lst):
     d = {}
-    for terms in zip(*l):
+    for terms in zip(*lst):
         d[terms[0]] = terms[1:]
 
     return pl.DataFrame(d)
