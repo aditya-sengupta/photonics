@@ -4,7 +4,13 @@ from matplotlib import pyplot as plt
 import hcipy as hc
 from hcipy import imshow_field
 from tqdm import trange
-
+from copy import copy
+from photonics.lantern_optics import LanternOptics
+from scipy.interpolate import griddata
+from matplotlib import animation
+from IPython.display import HTML
+# %%
+lo = LanternOptics(coupling=1.0)
 # %%
 wavelength_wfs = 842.0E-9
 telescope_diameter = 6.5
@@ -15,7 +21,7 @@ pupil_grid_diameter = 60/56 * telescope_diameter
 pupil_grid = hc.make_pupil_grid(num_pupil_pixels, pupil_grid_diameter)
 pwfs_grid = hc.make_pupil_grid(120, 2 * pupil_grid_diameter)
 magellan_aperture = hc.evaluate_supersampled(hc.make_magellan_aperture(), pupil_grid, 6)
-num_actuators_across_pupil = 10
+num_actuators_across_pupil = 30
 actuator_spacing = telescope_diameter / num_actuators_across_pupil
 influence_functions = hc.make_gaussian_influence_functions(pupil_grid, num_actuators_across_pupil, actuator_spacing)
 deformable_mirror = hc.DeformableMirror(influence_functions)
@@ -59,9 +65,9 @@ slopes = hc.ModeBasis(slopes)
 rcond = 1E-3
 reconstruction_matrix = hc.inverse_tikhonov(slopes.transformation_matrix, rcond=rcond, svd=None)
 # %%
-fried_parameter = 0.05  # meter; vary this from 0.05 (really bad) to 0.2 (really good)
+fried_parameter = 0.2  # meter; vary this from 0.05 (really bad) to 0.2 (really good)
 outer_scale = 50 #  meter (this parameter does not really matter)
-velocity = 50.0  # meter/sec
+velocity = 1.0  # meter/sec
 Cn_squared = hc.Cn_squared_from_fried_parameter(fried_parameter)  #convert the fried parameter into Cn2 which our model wants
 
 # make our atmospheric turbulence layer
@@ -73,7 +79,7 @@ prop = hc.FraunhoferPropagator(pupil_grid, focal_grid)
 ref_psf = prop(wf)
 norm = ref_psf.power.max()
 delta_t = 1E-3
-leakage = 1.0
+leakage = 0.0
 gain = 0.8
 PSF = prop(deformable_mirror(wf)).power
 def pyramid_loop(niter=1, plot_every=0):
@@ -83,6 +89,7 @@ def pyramid_loop(niter=1, plot_every=0):
     wfs_image /= np.sum(wfs_image)
     psf = prop(deformable_mirror(wf))
     strehls = [float(hc.get_strehl_from_focal(psf.intensity, ref_psf.intensity))]
+    focal_images = []
     for i in range(niter):
         if plot_every > 0 and i % plot_every == 0:
             fig, axs = plt.subplots(1, 2)
@@ -104,11 +111,61 @@ def pyramid_loop(niter=1, plot_every=0):
         phase = magellan_aperture * deformable_mirror.surface
         phase -= np.mean(phase[magellan_aperture>0])
         
-        psf = prop(deformable_mirror(wf))
+        psf = prop(wf_dm)
+        focal_images.append(copy(psf))
         strehls.append(float(hc.get_strehl_from_focal(psf.intensity, ref_psf.intensity)))
         
-    return wfs_image, psf, strehls
+    return focal_images, strehls
 
 # %%
-wfs_image, psf, strehls = pyramid_loop(10, 3)
+focal_images, strehls = pyramid_loop(50, 10)
+# %%
+lo = LanternOptics(coupling=1.0)
+lo.load_outputs()
+scaling_factor = np.max(focal_images[0].grid.x) / (lo.cladding_radius)
+_, _, lantern_ref = lo.lantern_output(lo.zernike_to_focal(1, 0.0))
+# %%
+def focal_to_lantern(img):
+    d = griddata((img.grid.x / scaling_factor, img.grid.y / scaling_factor), img.electric_field, (lo.focal_grid.x, lo.focal_grid.y), fill_value=0.0+0.0j)
+    wf_lantern_input = hc.Wavefront(hc.Field(d, lo.focal_grid), wavelength=lo.wl)
+    return lo.lantern_output(wf_lantern_input)
+# %%
+lantern_images = []
+for img in focal_images:
+    _, _, lantern_img = focal_to_lantern(img)
+    lantern_images.append(lantern_img)
+    plt.imshow(np.abs(lantern_img) ** 2)
+    plt.show()
+    
+# %%
+def normalize(x):
+    return x / np.max(x)
+# %%
+def create_closed_loop_animation():
+    fig = plt.figure(figsize=(10,3))
+    plt.subplot(1,2,1)
+    plt.title('PSF input to lantern')
+    im1 = imshow_field(np.log10(focal_images[0].intensity / norm))
+    plt.colorbar()
 
+    plt.subplot(1,2,2)
+    plt.title('Second-stage lantern readings')
+    im2 = plt.imshow(normalize(np.abs(lantern_images[0]) ** 2))
+    plt.colorbar()
+
+    plt.close(fig)
+
+    def animate(t):
+        im1.set_data(*focal_images[t].electric_field.grid.separated_coords, np.log10(focal_images[t].intensity / norm).shaped)
+        im2.set_data(normalize(np.abs(lantern_images[t]) ** 2))
+
+        return [im1, im2]
+
+    num_time_steps = len(focal_images)
+    time_steps = np.arange(num_time_steps)
+    anim = animation.FuncAnimation(fig, animate, time_steps, interval=160, blit=True)
+    return anim
+    return HTML(anim.to_jshtml(default_mode='loop'))
+
+anim = create_closed_loop_animation()
+# %%

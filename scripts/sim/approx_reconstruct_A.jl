@@ -5,7 +5,6 @@ using Plots
 
 im_show(x; kwargs...) = heatmap(x, aspect_ratio=1, showaxis=false, grid=false, xlim=(0, size(x, 1) + 2); kwargs...)
 
-
 function make_queries(measure, Nmodes, Ntest=200)
     basis_inputs = [[i == j ? 1 : 0 for i in 1:Nmodes] for j in 1:Nmodes]
     basis_outputs = map(measure, basis_inputs)
