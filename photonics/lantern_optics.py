@@ -3,7 +3,8 @@ import hcipy as hc
 import lightbeam as lb
 from matplotlib import pyplot as plt
 from tqdm import trange
-from .utils import PROJECT_ROOT
+from .utils import PROJECT_ROOT, date_now
+import paramiko
 
 class LanternOptics:
 	def __init__(self, f_number=10):
@@ -38,7 +39,8 @@ class LanternOptics:
 		self.input_footprint = np.where(out >= self.nclad ** 2)
 		self.extent_x = (np.min(self.input_footprint[0]), np.max(self.input_footprint[0]))
 		self.extent_y = (np.min(self.input_footprint[1]), np.max(self.input_footprint[1]))
-		
+		self.load_outputs()		
+  
 	def setup_hcipy(self, f_number):
 		self.f_number = f_number
 		self.pupil_grid = hc.make_pupil_grid(60, self.telescope_diameter)
@@ -71,7 +73,6 @@ class LanternOptics:
 		input_efield_2d[self.input_footprint[0] - xm, self.input_footprint[1] - ym] = input_efield
 		return input_efield_2d
 		
-
 	def make_mesh(self, lant):
 		mesh = lb.RectMesh3D(
 			xw = 512, # um
@@ -106,10 +107,11 @@ class LanternOptics:
 				plt.imshow(output_intensity)
 				plt.show()
 		
-		np.save(PROJECT_ROOT + "/data/backprop_19_{:.2f}.npy".format(self.f_number), np.array(outputs))
+		np.save(PROJECT_ROOT + f"/data/backprop_19_{date_now()}.npy", np.array(outputs))
+		np.save(PROJECT_ROOT + "/data/backprop_19.npy", np.array(outputs))
 		
 	def load_outputs(self):
-		outputs = np.load(PROJECT_ROOT + "/data/backprop_19_{:.2f}.npy".format(self.f_number))
+		outputs = np.load(PROJECT_ROOT + "/data/backprop_19.npy")
 		self.outputs = np.array([self.sanitize_output(x) for x in outputs])
 		self.projector = np.linalg.inv(self.outputs @ self.outputs.T) @ self.outputs
 
@@ -132,11 +134,14 @@ class LanternOptics:
 		return self.prop(self.phase_to_pupil(self.zernike_to_phase(zernike, amplitude)))
 
 	def lantern_output(self, focal_field):
-		profile_to_project = focal_field.electric_field.shaped[self.input_footprint]
-		coeffs = self.projector @ profile_to_project
+		coeffs = self.lantern_coeffs(focal_field)
 		projected = self.input_to_2d(coeffs @ self.outputs)
 		lantern_reading = sum(c * lf for (c, lf) in zip(coeffs, self.launch_fields))
 		return coeffs, projected, lantern_reading
+
+	def lantern_coeffs(self, focal_field):
+		profile_to_project = focal_field.electric_field.shaped[self.input_footprint]
+		return self.projector @ profile_to_project
 
 	def show_lantern_output(self, zernike, amplitude):
 		if not isinstance(zernike, list):
@@ -160,7 +165,7 @@ class LanternOptics:
 		plt.show()
 		
 	def lantern_reading(self, zernike, amplitude):
-		coeffs, _, _ = self.lantern_output(self.zernike_to_focal(zernike, amplitude))
+		coeffs = self.lantern_coeffs(self.zernike_to_focal(zernike, amplitude))
 		return np.abs(coeffs) ** 2
 	
 	def make_intcmd(self, nzern=6):
@@ -204,12 +209,12 @@ class LanternOptics:
 	def forward(self, pupil):
 		focal = self.prop.forward(pupil)
 		_, _, reading = self.lantern_output(focal)
-		return hc.Wavefront(hc.Field(reading.ravel(), self.focal_grid), wavelength=self.wl)
+		return hc.Wavefront(hc.Field(reading.ravel(), self.focal_grid), wavelength=self.wl*1e-6)
 	
 	def backward(self, reading):
 		coeffs = self.lantern_reverse @ reading.electric_field
 		lantern_input = self.input_to_2d(coeffs @ self.outputs, zoomed=False)
-		focal_wf = hc.Wavefront(hc.Field(lantern_input.ravel(), self.focal_grid), wavelength=self.wl)
+		focal_wf = hc.Wavefront(hc.Field(lantern_input.ravel(), self.focal_grid), wavelength=self.wl*1e-6)
 		pupil_field = self.prop.backward(focal_wf)
 		return pupil_field
 		 
@@ -246,21 +251,24 @@ class LanternOptics:
 			
 		return EM_in
 	
-	def show_GS(self, zernike, amplitude):
+	def show_GS(self, zernike, amplitude, niter=10):
 		input_phase = self.zernike_to_phase(zernike, amplitude)
 		reading = self.forward(self.phase_to_pupil(input_phase))
-		retrieved = self.GS(reading.intensity, niter=10)
+		retrieved = self.GS(reading.intensity, niter=niter)
+		retphase = retrieved.phase # (retrieved.phase % np.pi) - np.pi / 2
 		fig, axs = plt.subplots(1, 3)
 		fig.suptitle(f"Lantern phase retrieval, Zernike {zernike}, amplitude {amplitude}")
 		fig.subplots_adjust(top=1.4, bottom=0.0)
 		for ax in axs:
 			ax.set_xticks([])
 			ax.set_yticks([])
+		# vmin = np.minimum(np.min(input_phase), np.min(retphase))
+		# vmax = np.maximum(np.max(input_phase), np.max(retphase))
 		axs[0].imshow(input_phase.shaped)
 		axs[0].set_title("Phase screen")
 		axs[1].imshow(np.abs(reading.intensity.shaped))
 		axs[1].set_title("Lantern output")
-		axs[2].imshow(retrieved.phase.shaped)
+		hc.imshow_field(retphase * self.aperture, ax=axs[2])
 		axs[2].set_title("Retrieved phase")
 		plt.show()
   

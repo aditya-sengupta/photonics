@@ -1,3 +1,5 @@
+import os
+from os import path
 import subprocess
 import numpy as np
 import dao
@@ -6,11 +8,13 @@ from time import sleep, time
 from tqdm import tqdm, trange
 import warnings
 from matplotlib import pyplot as plt
+import paramiko
 
-from .utils import datetime_ms_now, time_ms_now, rms
+from .decometify import intensities_from_comet
+from .utils import date_now, datetime_ms_now, time_ms_now, rms, DATA_PATH
 
 def normalize(x):
-    return x / np.sum(x)
+	return x / np.sum(x)
 
 def save_telemetry(wait=0):
 	warnings.warn("If you see this and you're at Lick, uncommand the line starting with subprocess.run")
@@ -23,14 +27,41 @@ def save_telemetry(wait=0):
 	"""
 
 class ShaneLantern:
-	def __init__(self, reader, Nmodes=12):
-		self.reader = reader
+	def __init__(self, Nmodes=12):
 		self.Nmodes = Nmodes
+		self.Nports = 18
 		self.curr_dmc = np.zeros(Nmodes)
 		self.im = dao.shm('/tmp/testShm.im.shm', np.zeros((520, 656)).astype(np.uint16))
 		self.dit = dao.shm('/tmp/testShmDit.im.shm', np.zeros((1,1)).astype(np.float32))
 		self.gain = dao.shm('/tmp/testShmGain.im.shm', np.zeros((1,1)).astype(np.float32))
 		self.fps = dao.shm('/tmp/testShmFps.im.shm', np.zeros((1,1)).astype(np.float32))
+		self.setup_paramiko()
+		subdir = f"pl_{date_now()}"
+		self.subdir = subdir
+		if not os.path.isdir(self.directory):
+			os.mkdir(self.directory)
+		print(f"Path for data saving set to {self.directory}")
+
+	@property
+	def directory(self):
+		return path.join(DATA_PATH, self.subdir)
+ 
+	def setup_paramiko(self):
+		host = "karnak.ucolick.org"
+		username = "user"
+		password = "yam != spud"
+  
+		self.client = paramiko.client.SSHClient()
+		self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+		self.client.connect(host, username=username, password=password)
+  
+	def filepath(self, fname, ext=None):
+		"""
+		The path we want to save/load data from or to.
+		"""
+		if ext is None:
+			ext = self.ext
+		return path.join(DATA_PATH, self.subdir, fname + "." + ext)
   
 	def measure_dark(self):
 		darks = []
@@ -64,6 +95,24 @@ class ShaneLantern:
 		self.curr_dmc[:] = 0.0
 		self.curr_dmc[z-1] = amp
 		self.command_to_dm(verbose=verbose)
+  
+	def command_to_dm_p(self, verbose=True):
+		"""
+		Send a command to the ShaneAO woofer.
+
+		Parameters:
+			amplitudes - list or np.ndarray
+			The amplitude of each mode in [1, 2, ..., Nmodes], in order.
+		"""
+		assert len(self.curr_dmc) == self.Nmodes, "wrong number of modes specified"
+		assert np.all(np.abs(self.curr_dmc) <= 5.0), "sending out-of-bounds amplitudes"
+		command = ",".join(map(str, self.curr_dmc))
+		if verbose:
+			print(f"DMC {command}.")
+		full_command = f"/home/user/ShaneAO/shade/imageSharpen -s {command}"
+		_stdin, _stdout,_stderr = self.client.exec_command(full_command)
+		if verbose:
+			print(_stdout.read().decode())
 
 	def command_to_dm(self, verbose=True):
 		"""
@@ -78,9 +127,9 @@ class ShaneLantern:
 		command = ",".join(map(str, self.curr_dmc))
 		if verbose:
 			print(f"DMC {command}.")
-		warnings.warn("If you see this and you're at Lick, uncomment the lines defining and running shell_command.")
-		# shell_command = ["ssh", "-Y", "gavel@shade.ucolick.org", "local/bin/imageSharpen", "-s", command]
-		# subprocess.run(shell_command)
+		# warnings.warn("If you see this and you're at Lick, uncomment the lines defining and running shell_command.")
+		shell_command = ["ssh", "-Y", "user@karnak.ucolick.org", "/home/user/ShaneAO/shade/imageSharpen", "-s", command]
+		subprocess.run(shell_command)
 
 	def get_image(self):
 		"""
@@ -95,45 +144,36 @@ class ShaneLantern:
 			print("Sending zeros.")
 		self.command_to_dm(verbose=False)
 
-	def try_intensities(self, img):
-		if self.reader.save_intensities:
-			return self.reader.get_intensities(img)
-		else:
-			return self.reader.crop_to_bounding_box(img)
-
 	def experiment(self, patterns):
 		start_stamp = datetime_ms_now()
 		self.send_zeros(verbose=False)
 		img = self.get_image()
 		time_stamps = []
-		if self.reader.save_intensities:
-			pl_readout = np.zeros((len(patterns), self.reader.nports))
-		else:
-			bbox_shape = self.try_intensities(self.get_image()).shape
-			pl_readout = np.zeros((len(patterns), *bbox_shape))
+		bbox_shape = self.get_image().shape
+		pl_readout = np.zeros((len(patterns), *bbox_shape))
 		for (i, p) in enumerate(tqdm(patterns)):
 			time_stamps.append(time_ms_now())
 			self.curr_dmc = p
 			self.command_to_dm(verbose=False)
 			img = self.get_image()
-			pl_readout[i] = self.try_intensities(img)
+			pl_readout[i] = img
 		
 		self.send_zeros(verbose=False)
-		self.reader.save(f"dmc_{start_stamp}", patterns, verbose=False)
-		self.reader.save(f"timestamps_{start_stamp}", np.array(time_stamps), verbose=False)
-		self.reader.save(f"pl_{start_stamp}", pl_readout, verbose=False)
+		self.save(f"dmc_{start_stamp}", patterns, verbose=False)
+		self.save(f"timestamps_{start_stamp}", np.array(time_stamps), verbose=False)
+		self.save(f"pl_{start_stamp}", pl_readout, verbose=False)
 
 	def make_interaction_matrix(self, amp_calib=0.05):
-		self.int_mat = np.zeros((self.reader.nports, self.Nmodes))
+		self.int_mat = np.zeros((self.Nports, self.Nmodes))
 		for i in trange(self.Nmodes):
 			self.zern_to_dm(i + 1, amp_calib, verbose=False)
 			sleep(0.1)
 			# don't go through try_intensities for this
 			# i never want to do calibration on a full-frame lantern image
-			s_push = normalize(self.reader.get_intensities(self.get_image()))
+			s_push = intensities_from_comet(self.get_image())
 			self.zern_to_dm(i + 1, -amp_calib, verbose=False)
 			sleep(0.1)
-			s_pull = normalize(self.reader.get_intensities(self.get_image()))
+			s_pull = intensities_from_comet(self.get_image())
 			s = (s_push - s_pull) / (2 * amp_calib)
 			self.int_mat[:,i] = s.ravel()
 		
@@ -143,66 +183,11 @@ class ShaneLantern:
 	def compute_command_matrix(self, thres=1/30):
 		self.cmd_mat = np.linalg.pinv(self.int_mat, thres)
 
-	def linearity(self, modes_number=None, lim=1.0, step=0.1, plot=True):
-		"""
-		Make linearity curves for the WFS by sweeping (-lim, lim) in increments of `step`, and optionally plot them.
-
-		Parameters
-		----------
-		modes_number : int
-			The number of modes to check linearity for.
-		lim : float, default
-			The lower and upper limits on each mode, in DM units.
-		step : float, default
-			The increment used when sweeping through each mode, in DM units.
-		plot : bool, defaullt
-			Whether or not to plot the result.
-
-		Returns
-		-------
-		amp_range : np.array [nAmps]
-			The amplitudes used.
-		responses : np.array [nModes, nAmps, nWFS]
-			The full responses of the WFS to each mode.
-		"""
-		self.make_interaction_matrix()
-		self.compute_command_matrix()
-		if modes_number is None:
-			nModes = self.Nmodes
-		else:
-			nModes = modes_number
-		amp_range = np.arange(-lim, lim+2*np.finfo(float).eps, step)
-		ref_image = self.get_image()
-		ref_intensities = self.reader.get_intensities(ref_image)
-		responses = np.zeros((nModes, len(amp_range), len(ref_intensities)))
-		# interpretation: responses[i, j, k] contains the response in mode k to an input in mode i of amplitude amp_range[j].
-		# The range on i is set by the number of modes the user requests.
-		# The range on j is set by the limit and step size the user requests.
-		# The range on k is inherent to the WFS.
-		for i in range(1, nModes+1):
-			for (j, amp) in enumerate(tqdm(amp_range)):
-				self.zern_to_dm(i, float(amp), verbose=False)
-				responses[i - 1, j, :] = self.reader.get_intensities(self.get_image())
-
-		if plot:
-			nModes = responses.shape[0]
-			nrows = 3 
-			# can set up more labels and so on, but this is good for a start.
-			_, axs = plt.subplots(nrows, int(np.ceil(nModes / nrows)), sharex=True)
-			for i in range(nModes):
-				for k in range(responses.shape[2]):
-					alpha = 1 if i == k else 0.1
-					axs[k % nrows, k // nrows].plot(amp_range, responses[i,:,k], alpha=alpha)
-					# axs[k % nrows, k // nrows].set_xlabel(i + 2)
-			plt.show()
-   
-		return amp_range, responses
-
 	def pseudo_cl_iteration(self, gain=0.1):
 		# too experimental to put in loops and stuff!
 		# if this ends up working, just loop it together with saving frames and stuff manually
 		print(f"Initial error = {rms(self.curr_dmc)}")
-		lantern_reading = self.cmd_mat @ self.reader.get_intensities(self.get_image())
+		lantern_reading = self.cmd_mat @ intensities_from_comet(self.get_image())
 		# does the sign of measured WF errors match the actual signs?
 		sign_match = ''.join(map(lambda x: str(int(x)), (np.sign(lantern_reading * self.curr_dmc) * 2 + 2)/4))
 		print(f"{sign_match}")
@@ -212,8 +197,9 @@ class ShaneLantern:
 
 	# different types of experiment
 	def sweep_mode(self, z, min_amp=-1.0, max_amp=1.0, step=0.1, prompt=False):
-		amps = np.arange(min_amp, max_amp+step, step)
+		amps = np.arange(min_amp, max_amp+2*step, step)
 		patterns = np.zeros((len(amps), self.Nmodes))
+		patterns[:,z-1] = amps
 		self.experiment(patterns)
 
 	def sweep_all_modes(self, **kwargs):
@@ -260,6 +246,11 @@ class ShaneLantern:
 		pl_to_save = []
 		for img in tqdm(lantern_images):
 			pl_to_save.append(self.try_intensities(img))
-		self.reader.save(f"timestamps_{start_stamp}", time_stamps)
-		self.reader.save(f"pl_{start_stamp}", np.array(pl_to_save))
+		self.save(f"timestamps_{start_stamp}", time_stamps)
+		self.save(f"pl_{start_stamp}", np.array(pl_to_save))
 				
+	def save(self, fname, data, ext="npy", verbose=True):
+		fpath = self.filepath(fname, ext=ext)
+		if verbose:
+			print(f"Saving data to {fpath}")
+		np.save(self.filepath(fname, ext=ext), data)

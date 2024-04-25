@@ -17,6 +17,7 @@ lo.load_outputs()
 lo.setup_hcipy(f_number=6.5)
 # %%
 lo.make_intcmd(nzern=9)
+# %%
 amplitudes, linearity_responses = lo.make_linearity(nzern=9, lim=1.0, step=0.05)
 # %%
 lo.show_linearity(amplitudes, linearity_responses)

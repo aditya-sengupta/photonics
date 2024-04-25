@@ -1,4 +1,5 @@
 import subprocess
+import numpy as np
 from astropy.io import fits
 from datetime import datetime
 from functools import reduce
