@@ -7,7 +7,6 @@ from functools import reduce
 from time import sleep, time
 from tqdm import tqdm, trange
 import warnings
-from matplotlib import pyplot as plt
 import paramiko
 
 from .decometify import intensities_from_comet
@@ -53,8 +52,11 @@ class ShaneLantern:
   
 		self.client = paramiko.client.SSHClient()
 		self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-		self.client.connect(host, username=username, password=password)
-  
+		self.client.connect(host, 22, username=username, password=password)
+		self.channel = self.client.get_transport().open_session()
+		self.channel.get_pty()
+		self.channel.invoke_shell()
+	
 	def filepath(self, fname, ext=None):
 		"""
 		The path we want to save/load data from or to.
@@ -98,7 +100,7 @@ class ShaneLantern:
   
 	def command_to_dm_p(self, verbose=True):
 		"""
-		Send a command to the ShaneAO woofer.
+		Send a command to the ShaneAO woofer, with Paramiko for a persistent connection.
 
 		Parameters:
 			amplitudes - list or np.ndarray
@@ -110,10 +112,15 @@ class ShaneLantern:
 		if verbose:
 			print(f"DMC {command}.")
 		full_command = f"/home/user/ShaneAO/shade/imageSharpen -s {command}"
-		_stdin, _stdout,_stderr = self.client.exec_command(full_command)
+		self.channel.send(full_command)
+		output = ''
+		while not self.channel.recv_ready():
+			continue
+		while self.channel.recv_ready():
+			output += self.channel.recv(1024).decode('utf-8')
 		if verbose:
-			print(_stdout.read().decode())
-
+  			print(output)
+	
 	def command_to_dm(self, verbose=True):
 		"""
 		Send a command to the ShaneAO woofer.
@@ -162,26 +169,33 @@ class ShaneLantern:
 		self.save(f"dmc_{start_stamp}", patterns, verbose=False)
 		self.save(f"timestamps_{start_stamp}", np.array(time_stamps), verbose=False)
 		self.save(f"pl_{start_stamp}", pl_readout, verbose=False)
+		return np.array(list(map(intensities_from_comet, pl_readout)))
 
 	def make_interaction_matrix(self, amp_calib=0.05):
 		self.int_mat = np.zeros((self.Nports, self.Nmodes))
+		pushes = []
+		pulls = []
 		for i in trange(self.Nmodes):
 			self.zern_to_dm(i + 1, amp_calib, verbose=False)
 			sleep(0.1)
-			# don't go through try_intensities for this
-			# i never want to do calibration on a full-frame lantern image
 			s_push = intensities_from_comet(self.get_image())
+			pushes.append(s_push)
 			self.zern_to_dm(i + 1, -amp_calib, verbose=False)
 			sleep(0.1)
 			s_pull = intensities_from_comet(self.get_image())
+			pulls.append(s_pull)
 			s = (s_push - s_pull) / (2 * amp_calib)
 			self.int_mat[:,i] = s.ravel()
 		
+		self.save(f"pushes_amp_{amp_calib}_datetime_{datetime_ms_now()}", np.array(pushes))
+		self.save(f"pulls_amp_{amp_calib}_datetime_{datetime_ms_now()}", np.array(pulls))
+		self.save(f"intmat_amp_{amp_calib}_datetime_{datetime_ms_now()}", self.int_mat)
 		self.send_zeros()
-		self.compute_command_matrix()
+		self.compute_command_matrix(amp_calib)
 
-	def compute_command_matrix(self, thres=1/30):
+	def compute_command_matrix(self, amp_calib, thres=1/30):
 		self.cmd_mat = np.linalg.pinv(self.int_mat, thres)
+		self.save(f"cmdmat_amp_{amp_calib}_datetime_{datetime_ms_now()}", self.cmd_mat)
 
 	def pseudo_cl_iteration(self, gain=0.1):
 		# too experimental to put in loops and stuff!
@@ -196,16 +210,18 @@ class ShaneLantern:
 		print(f"Final error = {rms(self.curr_dmc)}")
 
 	# different types of experiment
-	def sweep_mode(self, z, min_amp=-1.0, max_amp=1.0, step=0.1, prompt=False):
+	def sweep_mode(self, z, min_amp=-1.0, max_amp=1.0, step=0.01):
 		amps = np.arange(min_amp, max_amp+2*step, step)
 		patterns = np.zeros((len(amps), self.Nmodes))
 		patterns[:,z-1] = amps
-		self.experiment(patterns)
+		return amps, self.experiment(patterns)
 
-	def sweep_all_modes(self, **kwargs):
+	def sweep_all_modes(self, min_amp=-1.0, max_amp=1.0, step=0.01):
+		amps = np.arange(min_amp, max_amp+step, step)
+		patterns = np.zeros((len(amps) * self.Nmodes + 1, self.Nmodes))
 		for z in range(1, self.Nmodes+1):
-			print(f"Sweeping mode {z}")
-			self.sweep_mode(z, **kwargs)
+			patterns[len(amps)*(z-1):len(amps)*(z),z-1] = amps
+		return amps, self.experiment(patterns)
 
 	def sweep_mode_combinations(self, amp=0.1, kmax=11, **kwargs):
 		patterns = amp * np.array(
@@ -213,7 +229,7 @@ class ShaneLantern:
 				[[float(i == j or i == j + k) for i in range(self.Nmodes)] for j in range(self.Nmodes - k)] for k in range(kmax)
 			])
 		)
-		self.experiment(patterns)
+		return patterns, self.experiment(patterns)
 
 	def probe_signal(self, wait=0):
 		probe = np.zeros((1, self.Nmodes))
@@ -222,7 +238,7 @@ class ShaneLantern:
 		self.experiment(probe)
 
 	def random_combinations(self, Niters, lim=1.0):
-		inputzs = np.random.uniform(-lim, lim, (Niters, self.Nmodes))
+		inputzs = np.random.uniform(-lim, lim, (Niters+1, self.Nmodes))
 		self.experiment(inputzs)
 
 	def onsky(self, timeout):
