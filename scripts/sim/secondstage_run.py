@@ -1,7 +1,14 @@
 # %%
-from photonics.pyramid_optics import PyramidOptics
-from photonics.lantern_optics import LanternOptics
-
+# ask about adding this to default profile on threadripper
+%load_ext autoreload
+%autoreload 2
 # %%
-py = PyramidOptics()
+from photonics.second_stage_optics import SecondStageOptics
+from photonics.lantern_optics import LanternOptics
+# %%
+lo = LanternOptics()
+# %%
+sso = SecondStageOptics(lo)
+# %%
+sso.pyramid_correction()
 # %%

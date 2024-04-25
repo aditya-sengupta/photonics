@@ -7,10 +7,10 @@ from .utils import PROJECT_ROOT, date_now
 import paramiko
 
 class LanternOptics:
-	def __init__(self, f_number=10):
+	def __init__(self, f_number=6.5):
 		# coupling = unaberrated PSF radius / input core radius
 		self.wl = 1.55
-		self.telescope_diameter = 10.0
+		self.telescope_diameter = 1.0
 		self.final_scale = 8 # tapering factor of lantern
 		self.cladding_radius = 37/2 * self.final_scale
 		self.core_offset = self.cladding_radius / 2.5 # offset of cores from origin
