@@ -34,7 +34,7 @@ class ShaneLantern:
 		self.dit = dao.shm('/tmp/testShmDit.im.shm', np.zeros((1,1)).astype(np.float32))
 		self.gain = dao.shm('/tmp/testShmGain.im.shm', np.zeros((1,1)).astype(np.float32))
 		self.fps = dao.shm('/tmp/testShmFps.im.shm', np.zeros((1,1)).astype(np.float32))
-		self.setup_paramiko()
+		# self.setup_paramiko()
 		subdir = f"pl_{date_now()}"
 		self.subdir = subdir
 		if not os.path.isdir(self.directory):
@@ -44,6 +44,9 @@ class ShaneLantern:
 	@property
 	def directory(self):
 		return path.join(DATA_PATH, self.subdir)
+
+	def setup_subprocess(self):
+		self.subproc = subprocess.Popen(["ssh", "-Y", "user@karnak.ucolick.org"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
  
 	def setup_paramiko(self):
 		host = "karnak.ucolick.org"
@@ -98,29 +101,6 @@ class ShaneLantern:
 		self.curr_dmc[z-1] = amp
 		self.command_to_dm(verbose=verbose)
   
-	def command_to_dm_p(self, verbose=True):
-		"""
-		Send a command to the ShaneAO woofer, with Paramiko for a persistent connection.
-
-		Parameters:
-			amplitudes - list or np.ndarray
-			The amplitude of each mode in [1, 2, ..., Nmodes], in order.
-		"""
-		assert len(self.curr_dmc) == self.Nmodes, "wrong number of modes specified"
-		assert np.all(np.abs(self.curr_dmc) <= 5.0), "sending out-of-bounds amplitudes"
-		command = ",".join(map(str, self.curr_dmc))
-		if verbose:
-			print(f"DMC {command}.")
-		full_command = f"/home/user/ShaneAO/shade/imageSharpen -s {command}"
-		self.channel.send(full_command)
-		output = ''
-		while not self.channel.recv_ready():
-			continue
-		while self.channel.recv_ready():
-			output += self.channel.recv(1024).decode('utf-8')
-		if verbose:
-  			print(output)
-	
 	def command_to_dm(self, verbose=True):
 		"""
 		Send a command to the ShaneAO woofer.
@@ -137,7 +117,7 @@ class ShaneLantern:
 		# warnings.warn("If you see this and you're at Lick, uncomment the lines defining and running shell_command.")
 		shell_command = ["ssh", "-Y", "user@karnak.ucolick.org", "/home/user/ShaneAO/shade/imageSharpen", "-s", command]
 		subprocess.run(shell_command)
-
+	
 	def get_image(self):
 		"""
 		Get an image off the lantern camera. 
@@ -171,11 +151,13 @@ class ShaneLantern:
 		self.save(f"pl_{start_stamp}", pl_readout, verbose=False)
 		return np.array(list(map(intensities_from_comet, pl_readout)))
 
-	def make_interaction_matrix(self, amp_calib=0.05):
-		self.int_mat = np.zeros((self.Nports, self.Nmodes))
+	def make_interaction_matrix(self, amp_calib=0.05, nm=None):
+		if nm is None:
+			nm = self.Nmodes
+		self.int_mat = np.zeros((self.Nports, nm))
 		pushes = []
 		pulls = []
-		for i in trange(self.Nmodes):
+		for i in trange(nm):
 			self.zern_to_dm(i + 1, amp_calib, verbose=False)
 			sleep(0.1)
 			s_push = intensities_from_comet(self.get_image())
@@ -201,7 +183,9 @@ class ShaneLantern:
 		# too experimental to put in loops and stuff!
 		# if this ends up working, just loop it together with saving frames and stuff manually
 		print(f"Initial error = {rms(self.curr_dmc)}")
-		lantern_reading = self.cmd_mat @ intensities_from_comet(self.get_image())
+		lantern_reading = np.zeros(self.Nmodes)
+		lr = self.cmd_mat @ intensities_from_comet(self.get_image())
+		lantern_reading[:len(lr)] = lr
 		# does the sign of measured WF errors match the actual signs?
 		sign_match = ''.join(map(lambda x: str(int(x)), (np.sign(lantern_reading * self.curr_dmc) * 2 + 2)/4))
 		print(f"{sign_match}")
@@ -210,13 +194,13 @@ class ShaneLantern:
 		print(f"Final error = {rms(self.curr_dmc)}")
 
 	# different types of experiment
-	def sweep_mode(self, z, min_amp=-1.0, max_amp=1.0, step=0.01):
+	def sweep_mode(self, z, min_amp=-1.0, max_amp=1.0, step=0.1):
 		amps = np.arange(min_amp, max_amp+2*step, step)
 		patterns = np.zeros((len(amps), self.Nmodes))
 		patterns[:,z-1] = amps
 		return amps, self.experiment(patterns)
 
-	def sweep_all_modes(self, min_amp=-1.0, max_amp=1.0, step=0.01):
+	def sweep_all_modes(self, min_amp=-1.0, max_amp=1.0, step=0.1):
 		amps = np.arange(min_amp, max_amp+step, step)
 		patterns = np.zeros((len(amps) * self.Nmodes + 1, self.Nmodes))
 		for z in range(1, self.Nmodes+1):
