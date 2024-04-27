@@ -39,8 +39,8 @@ begin
         linear_end = findlast(deviation .< 0.2)
         # lr = amps[linear_end] - amps[linear_start]
         pk = plot(xlabel="Mode $(k)", label=nothing, legend=:outertopright)
-        plot!(amps * rad2opd, lin_k * rad2opd, alpha=a)
-        plot!(amps * rad2opd, amps * rad2opd, ls=:dash, color=:black)
+        plot!(amps, lin_k, alpha=a)
+        plot!(amps, amps, ls=:dash, color=:black)
         # vspan!([amps[linear_start], amps[linear_end]], alpha=0.2)
         push!(pl, pk)
     end

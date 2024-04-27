@@ -15,7 +15,12 @@ lo = LanternOptics(f_number=10)
 # %%
 lo.setup_hcipy(f_number=6.5)
 # %%
+<<<<<<< HEAD:scripts/sim/fnumber_tests.py
 lo.make_command_matrix(nzern=9)
+=======
+lo.make_intcmd(nzern=9)
+# %%
+>>>>>>> b9334baeaae2ffb972e51444f981bf0284e999b4:scripts/sim/backwards_prop_19.py
 amplitudes, linearity_responses = lo.make_linearity(nzern=9, lim=1.0, step=0.05)
 # %%
 lo.show_linearity(amplitudes, linearity_responses)

@@ -1,7 +1,6 @@
 import numpy as np
 import hcipy as hc
 import os
-from matplotlib import pyplot as plt
 from tqdm import trange
 from .utils import PROJECT_ROOT, date_now
 
@@ -16,12 +15,11 @@ class PyramidOptics:
 
     def setup(self, opt):
         # set up pyramid wavefront sensor
-        self.wl = opt.wl
-        pixels_pyramid_pupils = 20 # number of pixels across each pupil; want 120 %(mod) pixels_pyramid_pupils =0. VARY THIS PARAMETER
+        pixels_pyramid_pupils = 20 # number of pixels across each pupil
         pwfs_grid = hc.make_pupil_grid(pixels_pyramid_pupils*2,opt.telescope_diameter*2)
 
         mld = 5
-        modradius = mld * opt.wl / opt.telescope_diameter # modulation radius in radians;
+        modradius = mld * opt.wl / opt.telescope_diameter # modulation radius in radians
         self.modsteps = 4 # needs to be a factor of 4
 
         pwfs = hc.PyramidWavefrontSensorOptics(opt.pupil_grid, pwfs_grid, separation=opt.telescope_diameter, wavelength_0=opt.wl)

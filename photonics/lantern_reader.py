@@ -136,7 +136,7 @@ class LanternReader:
 
         return np.flip(xnew), np.flip(ynew), np.flip((k - 1 - radial_shell) / (k - 1))
 
-    def bounding_box(self, pad=5):
+    def bounding_box(self, pad=0):
         return (floor(min(self.xc)-pad), ceil(max(self.xc)+pad), floor(min(self.yc)-pad), ceil(max(self.yc)+pad))
 
     def crop_to_bounding_box(self, img, savename=None, pad=15):
