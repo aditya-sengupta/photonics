@@ -12,11 +12,10 @@ from photonics import PROJECT_ROOT
 from tqdm import tqdm
 # %%
 lo = LanternOptics(f_number=10)
-lo.load_outputs()
 # %%
 lo.setup_hcipy(f_number=6.5)
 # %%
-lo.make_intcmd(nzern=9)
+lo.make_command_matrix(nzern=9)
 amplitudes, linearity_responses = lo.make_linearity(nzern=9, lim=1.0, step=0.05)
 # %%
 lo.show_linearity(amplitudes, linearity_responses)
@@ -25,6 +24,8 @@ def linearity_loss(amplitudes, linearity_responses):
     comparison = np.eye(linearity_responses.shape[2])[:, np.newaxis, :]
     return np.sum((comparison * amplitudes[np.newaxis, :, np.newaxis] - linearity_responses) ** 2)
 
+# %%
+linearity_loss(amplitudes, linearity_responses)
 # %%
 def fnumber_objective(f, nzern=9):
     print(f)

@@ -3,12 +3,15 @@
 %load_ext autoreload
 %autoreload 2
 # %%
+import numpy as np
+from matplotlib import pyplot as plt
 from photonics.second_stage_optics import SecondStageOptics
-from photonics.lantern_optics import LanternOptics
 # %%
-lo = LanternOptics()
+sso = SecondStageOptics()
 # %%
-sso = SecondStageOptics(lo)
+psfs = sso.pyramid_correction(gain=0.5)
 # %%
-sso.pyramid_correction()
+for lantern_output in map(lambda p: sso.lantern_optics.lantern_output_to_plot(p), psfs):
+    plt.imshow(np.abs(lantern_output) ** 2)
+    plt.show()
 # %%

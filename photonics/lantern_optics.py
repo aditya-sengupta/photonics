@@ -6,10 +6,14 @@ from tqdm import trange
 from .utils import PROJECT_ROOT
 
 class LanternOptics:
-	def __init__(self, f_number=6.5):
-		# coupling = unaberrated PSF radius / input core radius
+	def __init__(self, opt=None, f_number=None):
+		if opt is None:
+			mesh_extent, mesh_spacing = 512, 1
+			self.telescope_diameter = 1
+		else:
+			mesh_extent, mesh_spacing = opt.mesh_extent, opt.mesh_spacing
+			self.telescope_diameter = opt.telescope_diameter
 		self.wl = 1.55
-		self.telescope_diameter = 1.0
 		self.final_scale = 8 # tapering factor of lantern
 		self.cladding_radius = 37/2 * self.final_scale
 		self.core_offset = self.cladding_radius / 2.5 # offset of cores from origin
@@ -19,8 +23,7 @@ class LanternOptics:
 		self.rcore = 2.2
 		self.z_ex = 60_000
 		self.lant = lb.optics.make_lant19(self.core_offset,self.rcore,self.cladding_radius,0,self.z_ex, (self.ncore,self.nclad,self.njack),final_scale=1/self.final_scale)
-		self.make_mesh(self.lant)
-		self.setup_hcipy(f_number)
+		self.make_mesh(mesh_extent, mesh_spacing)
 		self.launch_fields = [
 			lb.normalize(lb.lpfield(self.xg-pos[0], self.yg-pos[1], 0, 1, self.rcore, self.wl, self.ncore, self.nclad))
 			for pos in self.lant.init_core_locs
@@ -38,7 +41,20 @@ class LanternOptics:
 		self.input_footprint = np.where(out >= self.nclad ** 2)
 		self.extent_x = (np.min(self.input_footprint[0]), np.max(self.input_footprint[0]))
 		self.extent_y = (np.min(self.input_footprint[1]), np.max(self.input_footprint[1]))
-		
+		# I'm adding these in here just so I don't break GS etc.
+		# In theory a WFS should be agnostic to these things
+		# but I think the more elegant solution will be to add a photonic lantern to hcipy
+		# For the sake of second-stage, it just matters that these are consistent with what the pyramid sees
+		if opt is None:
+			self.setup_hcipy(f_number)
+		else:
+			self.telescope_diameter = opt.telescope_diameter
+			self.pupil_grid = opt.pupil_grid
+			self.focal_grid = opt.focal_grid
+			self.prop = opt.focal_propagator
+   
+		self.load_outputs()
+   
 	def setup_hcipy(self, f_number):
 		self.f_number = f_number
 		self.pupil_grid = hc.make_pupil_grid(60, self.telescope_diameter)
@@ -53,7 +69,25 @@ class LanternOptics:
 		self.prop = hc.FraunhoferPropagator(self.pupil_grid, self.focal_grid, focal_length=(f_number * self.telescope_diameter))
 		self.pupil_wf_ref = self.zernike_to_pupil(4, 0.0)
 		self.focal_wf_ref = self.prop(self.pupil_wf_ref)
-		
+  
+	def zernike_to_phase(self, zernike, amplitude):
+		if isinstance(zernike, list) and isinstance(amplitude, list):
+			phase = hc.Field(sum(a * hc.mode_basis.zernike_ansi(z, D=self.telescope_diameter)(self.pupil_grid).shaped for (z, a) in zip(zernike, amplitude)).ravel(), self.pupil_grid)
+		else:
+			phase = amplitude * hc.mode_basis.zernike_ansi(zernike, D=self.telescope_diameter)(self.pupil_grid)
+		return phase
+
+	def phase_to_pupil(self, phase):
+		aberration = np.exp(1j * phase)
+		wavefront = hc.Wavefront(self.aperture * aberration, wavelength=self.wl*1e-6)
+		return wavefront
+	
+	def zernike_to_pupil(self, zernike, amplitude):
+		return self.phase_to_pupil(self.zernike_to_phase(zernike, amplitude))
+			
+	def zernike_to_focal(self, zernike, amplitude):
+		return self.prop(self.phase_to_pupil(self.zernike_to_phase(zernike, amplitude)))
+
 	def input_to_2d(self, input_efield, zoomed=True):
 		"""
 		Takes in an input electric field as a 1D array (coordinates represented by input_footprint) and fills it in to a 2D grid for plotting.
@@ -71,20 +105,19 @@ class LanternOptics:
 		input_efield_2d[self.input_footprint[0] - xm, self.input_footprint[1] - ym] = input_efield
 		return input_efield_2d
 		
-
-	def make_mesh(self, lant):
-		mesh = lb.RectMesh3D(
-			xw = 512, # um
-			yw = 512, # um
+	def make_mesh(self, mesh_extent, mesh_spacing):
+		PML = 8
+		self.mesh = lb.RectMesh3D(
+			xw = mesh_extent, # um
+			yw = mesh_extent, # um
 			zw = self.z_ex, # um
-			ds = 1, # um
+			ds = mesh_spacing, # um
 			dz = 50, # um
-			PML = 8 # grid units
+			PML = PML # grid units
 		)
-		lant.set_sampling(mesh.xy)
-		xg, yg = mesh.grids_without_pml()
-		self.mesh = mesh
-		self.w = self.mesh.xy.get_weights()[mesh.PML:-mesh.PML,mesh.PML:-mesh.PML]
+		self.lant.set_sampling(self.mesh.xy)
+		xg, yg = self.mesh.grids_without_pml()
+		self.w = self.mesh.xy.get_weights()[PML:-PML,PML:-PML]
 		self.xg = xg
 		self.yg = yg
 		
@@ -106,30 +139,12 @@ class LanternOptics:
 				plt.imshow(output_intensity)
 				plt.show()
 		
-		np.save(PROJECT_ROOT + "/data/backprop_19_{:.2f}.npy".format(self.f_number), np.array(outputs))
+		np.save(PROJECT_ROOT + "/data/backprop_19.npy", np.array(outputs))
 		
 	def load_outputs(self):
-		outputs = np.load(PROJECT_ROOT + "/data/backprop_19.npy".format(self.f_number))
+		outputs = np.load(PROJECT_ROOT + "/data/backprop_19.npy")
 		self.outputs = np.array([self.sanitize_output(x) for x in outputs])
 		self.projector = np.linalg.inv(self.outputs @ self.outputs.T) @ self.outputs
-
-	def zernike_to_phase(self, zernike, amplitude):
-		if isinstance(zernike, list) and isinstance(amplitude, list):
-			phase = hc.Field(sum(a * hc.mode_basis.zernike_ansi(z, D=self.telescope_diameter)(self.pupil_grid).shaped for (z, a) in zip(zernike, amplitude)).ravel(), self.pupil_grid)
-		else:
-			phase = amplitude * hc.mode_basis.zernike_ansi(zernike, D=self.telescope_diameter)(self.pupil_grid)
-		return phase
-
-	def phase_to_pupil(self, phase):
-		aberration = np.exp(1j * phase)
-		wavefront = hc.Wavefront(self.aperture * aberration, wavelength=self.wl*1e-6)
-		return wavefront
-	
-	def zernike_to_pupil(self, zernike, amplitude):
-		return self.phase_to_pupil(self.zernike_to_phase(zernike, amplitude))
-		
-	def zernike_to_focal(self, zernike, amplitude):
-		return self.prop(self.phase_to_pupil(self.zernike_to_phase(zernike, amplitude)))
 
 	def lantern_output(self, focal_field):
 		profile_to_project = focal_field.electric_field.shaped[self.input_footprint]
@@ -137,6 +152,12 @@ class LanternOptics:
 		projected = self.input_to_2d(coeffs @ self.outputs)
 		lantern_reading = sum(c * lf for (c, lf) in zip(coeffs, self.launch_fields))
 		return coeffs, projected, lantern_reading
+
+	def lantern_output_to_plot(self, focal_field):
+		profile_to_project = focal_field.electric_field.shaped[self.input_footprint]
+		coeffs = self.projector @ profile_to_project
+		lantern_reading = sum(c * lf for (c, lf) in zip(coeffs, self.plotting_launch_fields))
+		return lantern_reading
 
 	def show_lantern_output(self, zernike, amplitude):
 		if not isinstance(zernike, list):
@@ -163,7 +184,7 @@ class LanternOptics:
 		coeffs, _, _ = self.lantern_output(self.zernike_to_focal(zernike, amplitude))
 		return np.abs(coeffs) ** 2
 	
-	def make_intcmd(self, nzern=6):
+	def make_command_matrix(self, nzern=6):
 		poke_amplitude = 1e-10
 		pokes = []
 		for i in trange(1, nzern+1):
@@ -171,8 +192,8 @@ class LanternOptics:
 			amp_minus = self.lantern_reading(i, -poke_amplitude)
 			pokes.append((amp_plus - amp_minus) / (2 * poke_amplitude))
 
-		self.int_matrix = np.array(pokes).T
-		self.cmd_matrix = np.linalg.pinv(self.int_matrix, rcond=1e-5)
+		interaction_matrix = np.array(pokes).T
+		self.command_matrix = np.linalg.pinv(interaction_matrix, rcond=1e-5)
 		self.flat_amp = self.lantern_reading(1, 0.0)
 		
 	def make_linearity(self, nzern=6, lim=0.1, step=None):
@@ -183,7 +204,7 @@ class LanternOptics:
 		for z in trange(1, nzern+1):
 			for (j,a) in enumerate(amplitudes):
 				flattened = self.lantern_reading(z,a) - self.flat_amp
-				response = self.cmd_matrix @ flattened
+				response = self.command_matrix @ flattened
 				linearity_responses[z-1,j,:nzern] = response
 		
 		return amplitudes, linearity_responses
@@ -232,7 +253,7 @@ class LanternOptics:
 		EM_out = measuredAmplitude_out * np.exp(1j*phase_out_0)
 		# Back Propagation in PWFS
 		EM_in = self.backward(hc.Wavefront(EM_out, wavelength=self.wl))
-		for k in trange(niter):
+		for _ in trange(niter):
 			# replacing by known amplitude
 			phase_in_k = EM_in.phase
 			EM_in = hc.Wavefront(measuredAmplitude_in.electric_field*np.exp(1j*phase_in_k),wavelength=self.wl)

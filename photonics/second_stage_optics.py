@@ -3,44 +3,35 @@ import hcipy as hc
 from tqdm import trange
 from matplotlib import pyplot as plt
 from .pyramid_optics import PyramidOptics
+from .lantern_optics import LanternOptics
 
 class SecondStageOptics:
-	def __init__(self, lo):
-		self.optics_setup_lantern(lo)
+	def __init__(self, lantern_fnumber=6.5):
+		self.optics_setup(lantern_fnumber)
 		self.turbulence_setup()
 		self.dm_setup()
-		self.pyramid = PyramidOptics(self)
+		self.pyramid_optics = PyramidOptics(self)
+		self.lantern_optics = LanternOptics(self)
 		
-	def optics_setup_lantern(self, lo):
+	def optics_setup(self, lantern_fnumber=6.5):
+		self.lantern_fnumber = lantern_fnumber
+		self.mesh_extent = 512 # microns
+		self.mesh_spacing = 1 # micron
 		self.telescope_diameter = 1
-		self.wl = lo.wl * 1e-6
+		self.wl = 1.55e-6
 		self.k = 2 * np.pi / self.wl
-		self.f_number = lo.f_number
 		self.pupil_grid = hc.make_pupil_grid(60, self.telescope_diameter)
 		self.aperture = hc.evaluate_supersampled(hc.make_circular_aperture(self.telescope_diameter), self.pupil_grid, 6)
-		spatial_resolution = self.wl * 1e-6 * self.f_number # m/m = fraction
-		q = spatial_resolution / lo.mesh.ds / 1e-6
-		num_airy = lo.mesh.xw * 1e-6 / (2 * spatial_resolution) # number of resolution elements
+		spatial_resolution = self.wl * 1e-6 * self.lantern_fnumber # m/m = fraction
+		q = spatial_resolution / self.mesh_spacing / 1e-6
+		num_airy = self.mesh_extent * 1e-6 / (2 * spatial_resolution) # number of resolution elements
 		num_px = 2 * q * num_airy
 		if num_px % 2 == 0:
 			num_airy *= (num_px + 1) / num_px
 		self.focal_grid = hc.make_focal_grid(q=q, num_airy=num_airy, spatial_resolution=spatial_resolution)
-		self.focal_propagator = hc.FraunhoferPropagator(self.pupil_grid, self.focal_grid, focal_length=(self.f_number * self.telescope_diameter))
-		self.pupil_wf_ref = lo.zernike_to_pupil(4, 0.0)
+		self.focal_propagator = hc.FraunhoferPropagator(self.pupil_grid, self.focal_grid, focal_length=(self.lantern_fnumber * self.telescope_diameter))
+		self.pupil_wf_ref = self.zernike_to_pupil(4, 0.0)
 		self.focal_wf_ref = self.focal_propagator(self.pupil_wf_ref)
-		self.wf = hc.Wavefront(self.aperture, wavelength=self.wl)
-		self.wf.total_power = 1
-		self.im_ref = self.focal_propagator.forward(self.wf)
-		self.norm = np.max(self.im_ref.intensity)
-		
-	def optics_setup(self):
-		self.telescope_diameter = 1  
-		self.pupil_grid = hc.make_pupil_grid(60, diameter=self.telescope_diameter)
-		self.aperture = hc.evaluate_supersampled(hc.make_circular_aperture(self.telescope_diameter), self.pupil_grid, 6)
-		self.wl = 1.55e-6
-		self.k = 2*np.pi/self.wl
-		self.focal_grid = hc.make_focal_grid(q=4, num_airy=20,spatial_resolution=self.wl/self.telescope_diameter)
-		self.focal_propagator = hc.FraunhoferPropagator(self.pupil_grid, self.focal_grid)
 		self.wf = hc.Wavefront(self.aperture, wavelength=self.wl)
 		self.wf.total_power = 1
 		self.im_ref = self.focal_propagator.forward(self.wf)
@@ -61,10 +52,32 @@ class SecondStageOptics:
 		actuator_spacing = self.telescope_diameter / num_actuators
 		influence_functions = hc.make_gaussian_influence_functions(self.pupil_grid, num_actuators, actuator_spacing)
 		self.deformable_mirror = hc.DeformableMirror(influence_functions)
-		
-	def pyramid_correction(self, num_iterations=40, dt=1./800, gain = 0.6, leakage = 0.999):
-		sr=[]
+	
+	# awful design. Need a refactor so these don't also live in lanternoptics, after I've got GS working.
+	def zernike_to_phase(self, zernike, amplitude):
+		if isinstance(zernike, list) and isinstance(amplitude, list):
+			phase = hc.Field(sum(a * hc.mode_basis.zernike_ansi(z, D=self.telescope_diameter)(self.pupil_grid).shaped for (z, a) in zip(zernike, amplitude)).ravel(), self.pupil_grid)
+		else:
+			phase = amplitude * hc.mode_basis.zernike_ansi(zernike, D=self.telescope_diameter)(self.pupil_grid)
+		return phase
 
+	def phase_to_pupil(self, phase):
+		aberration = np.exp(1j * phase)
+		wavefront = hc.Wavefront(self.aperture * aberration, wavelength=self.wl*1e-6)
+		return wavefront
+	
+	def zernike_to_pupil(self, zernike, amplitude):
+		return self.phase_to_pupil(self.zernike_to_phase(zernike, amplitude))
+			
+	def zernike_to_focal(self, zernike, amplitude):
+		return self.prop(self.phase_to_pupil(self.zernike_to_phase(zernike, amplitude)))
+
+	def pyramid_correction(self, num_iterations=10, dt=1./800, gain = 0.6, leakage = 0.999):
+		"""
+  		Soon this will be the general CL test and we'll be able to turn on one WFS or the other
+    	"""
+		psfs = []
+		sr = []
 		self.layer.reset()
 		self.layer.t = 0
 		for timestep in trange(num_iterations):
@@ -81,18 +94,19 @@ class SecondStageOptics:
 			wf_after_dm = self.deformable_mirror.forward(wf_after_atmos)
 
 			#send the wavefront containing the residual wavefront error to the PyWFS and get slopes
-			wfs_image = self.pyramid.readout(wf_after_dm)
-			diff_image = wfs_image - self.pyramid.image_ref
+			wfs_image = self.pyramid_optics.readout(wf_after_dm)
+			diff_image = wfs_image - self.pyramid_optics.image_ref
 
 			#Leaky integrator to calculate new DM commands
-			self.deformable_mirror.actuators =  leakage*self.deformable_mirror.actuators - gain * self.pyramid.command_matrix.dot(diff_image)
+			self.deformable_mirror.actuators =  leakage*self.deformable_mirror.actuators - gain * self.pyramid_optics.command_matrix.dot(diff_image)
 
 			# Propagate to focal plane
 			wf_focal = self.focal_propagator.forward(wf_after_dm)
 
 			#calculate the strehl ratio to use as a metric for how well the AO system is performing.
 			strehl_foc = hc.get_strehl_from_focal(wf_focal.intensity/self.norm,self.im_ref.intensity/self.norm)
-			sr.append(strehl_foc)
+			sr.append(float(strehl_foc))
+			psfs.append(wf_focal.copy())
 			
 		#plot the results
 		fig = plt.figure(figsize=(15,8))
@@ -104,7 +118,7 @@ class SecondStageOptics:
 
 		plt.subplot(1,3,2)
 		plt.title('Residual wavefront error (rad)')
-		res=wf_after_dm.phase*self.aperture
+		res = wf_after_dm.phase*self.aperture
 		hc.imshow_field(res, cmap='RdBu')
 		plt.colorbar(fraction=0.046, pad=0.04)
 
@@ -114,5 +128,7 @@ class SecondStageOptics:
 		plt.colorbar(fraction=0.046, pad=0.04)
 		plt.tight_layout()
 		plt.show()
-		return list(map(float, sr))
+		return psfs
+
+
 	

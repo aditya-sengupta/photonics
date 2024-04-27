@@ -10,11 +10,13 @@ class PyramidOptics:
         """
         Make a pyramid wavefront sensor based on an optical setup (SecondStageOptics).
         """
+        self.wl = opt.wl
         self.setup(opt)
         self.make_command_matrix(opt)
 
     def setup(self, opt):
         # set up pyramid wavefront sensor
+        self.wl = opt.wl
         pixels_pyramid_pupils = 20 # number of pixels across each pupil; want 120 %(mod) pixels_pyramid_pupils =0. VARY THIS PARAMETER
         pwfs_grid = hc.make_pupil_grid(pixels_pyramid_pupils*2,opt.telescope_diameter*2)
 
@@ -42,7 +44,7 @@ class PyramidOptics:
             self.command_matrix = np.load(cmd_path)
         else:
             probe_amp = 0.01 * self.wl
-            num_modes = self.deformable_mirror.num_actuators
+            num_modes = opt.deformable_mirror.num_actuators
             slopes = []
 
             for ind in trange(num_modes):
@@ -53,13 +55,13 @@ class PyramidOptics:
                     amp = np.zeros((num_modes,))
                     amp[ind] = s * probe_amp
                     opt.deformable_mirror.actuators = amp
-                    dm_wf = opt.deformable_mirror.forward(self.wf)
+                    dm_wf = opt.deformable_mirror.forward(opt.wf)
                     image = self.readout(dm_wf)
                     slope += s * (image-self.image_ref)/(2 * probe_amp)
 
                 slopes.append(slope)
 
             slopes = hc.ModeBasis(slopes)
-            self.pyramid_command_matrix = hc.inverse_tikhonov(slopes.transformation_matrix, rcond=1e-3, svd=None)
+            self.command_matrix = hc.inverse_tikhonov(slopes.transformation_matrix, rcond=1e-3, svd=None)
             np.save(PROJECT_ROOT + f"/data/secondstage_pyramid/cm_{date_now()}.npy", self.command_matrix)
     
