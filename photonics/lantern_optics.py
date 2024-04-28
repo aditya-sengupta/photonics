@@ -145,7 +145,6 @@ class LanternOptics:
 		
 	def load_outputs(self):
 		outputs = np.load(PROJECT_ROOT + "/data/backprop_19.npy")
-		outputs = np.load(PROJECT_ROOT + "/data/backprop_19.npy")
 		self.outputs = np.array([self.sanitize_output(x) for x in outputs])
 		self.projector = np.linalg.inv(self.outputs @ self.outputs.T) @ self.outputs
 
