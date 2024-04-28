@@ -3,7 +3,7 @@ import hcipy as hc
 import lightbeam as lb
 from matplotlib import pyplot as plt
 from tqdm import trange
-from .utils import PROJECT_ROOT, date_now
+from .utils import PROJECT_ROOT, date_now, is_list_or_dim1_array
 
 class LanternOptics:
 	def __init__(self, opt=None, f_number=None):
@@ -71,7 +71,7 @@ class LanternOptics:
 		self.focal_wf_ref = self.prop(self.pupil_wf_ref)
   
 	def zernike_to_phase(self, zernike, amplitude):
-		if isinstance(zernike, list) and isinstance(amplitude, list):
+		if is_list_or_dim1_array(zernike) and is_list_or_dim1_array(amplitude):
 			phase = hc.Field(sum(a * hc.mode_basis.zernike_ansi(z, D=self.telescope_diameter)(self.pupil_grid).shaped for (z, a) in zip(zernike, amplitude)).ravel(), self.pupil_grid)
 		else:
 			phase = amplitude * hc.mode_basis.zernike_ansi(zernike, D=self.telescope_diameter)(self.pupil_grid)
