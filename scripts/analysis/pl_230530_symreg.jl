@@ -8,7 +8,7 @@ relu(x) = max(x, zero(x))
 
 options = SymbolicRegression.Options(
     binary_operators=[+, *, -, /],
-    unary_operators=[tanh],
+    unary_operators=[sin, cos, tan, sinh, cosh, tanh, exp, log, relu],
     npopulations=20
 )
 

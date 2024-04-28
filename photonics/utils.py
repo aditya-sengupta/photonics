@@ -7,6 +7,9 @@ PROJECT_ROOT = path.dirname(path.dirname(path.abspath(__file__)))
 DATA_PATH = path.join(PROJECT_ROOT, "data")
 if not os.path.isdir(DATA_PATH):
     os.mkdir(DATA_PATH)
+    
+def is_list_or_dim1_array(x):
+    return isinstance(x, list) or (isinstance(x, np.ndarray) and len(x.shape) == 1)
 
 def date_now():
     return datetime.now().strftime("%Y%m%d")[2:]
