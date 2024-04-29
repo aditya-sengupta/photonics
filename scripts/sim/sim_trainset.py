@@ -7,17 +7,17 @@ from os import path
 
 lo = LanternOptics(f_number=6.5)
 nzern = 9
-lim = 0.12
-N = 60
-zcoeffs = np.arange(1, nzern + 1)
-zamps = np.random.uniform(-lim, lim, (N, nzern))
-lantern_coeffs = np.empty((N, len(lo.lant.init_core_locs)), dtype=np.complex128)
-
-for (i, c) in enumerate(tqdm(zamps)):
-    lantern_coeffs[i] = lo.lantern_coeffs(lo.zernike_to_focal(zcoeffs, c))
-
+N = 60_000
 # %%
-dtnow = datetime_now()
-np.save(path.join(DATA_PATH, f"sim_trainset_amplitudes_{dtnow}.npy"), zamps)
-np.save(path.join(DATA_PATH, f"sim_trainset_lanterns_{dtnow}.npy"), lantern_coeffs)
+for lim in [0.12, 0.25, 0.5, 1.0]:
+    zcoeffs = np.arange(1, nzern + 1)
+    zamps = np.random.uniform(-lim, lim, (N, nzern))
+    lantern_coeffs = np.empty((N, len(lo.lant.init_core_locs)), dtype=np.complex128)
+
+    for (i, c) in enumerate(tqdm(zamps)):
+        lantern_coeffs[i] = lo.lantern_coeffs(lo.zernike_to_focal(zcoeffs, c))
+
+    dtnow = datetime_now()
+    np.save(path.join(DATA_PATH, f"sim_trainset_amplitudes_{dtnow}.npy"), zamps)
+    np.save(path.join(DATA_PATH, f"sim_trainset_lanterns_{dtnow}.npy"), lantern_coeffs)
 # %%
