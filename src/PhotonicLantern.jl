@@ -7,7 +7,7 @@ module PhotonicLantern
     """
     Makes the ideal interaction matrices B and C out of a forward matrix A.
     """
-    function interaction_matrices(A)
+    function interaction_from_forward(A)
         cA = conj(A)
         @tullio interaction[i,j] := cA[i,j] * A[i,k]
         return 2 * imag(interaction), 2 * real(interaction)
@@ -78,6 +78,8 @@ module PhotonicLantern
     function rescale(v, vmin::Vector, vmax::Vector)
         return v .* (vmax .- vmin) .+ vmin
     end
+
+    include("interaction.jl")
 
     export interaction_matrices, quadratic_forward, quadratic_jacobian, lpfield, make_unitary_matrix, is_unitary, sigma_clamp, zero_one_ify, im_show, im_show!, phasewrap, rescale
 end # module PhotonicLantern
