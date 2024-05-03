@@ -1,5 +1,7 @@
 import numpy as np
 import hcipy as hc
+from copy import copy
+from hcipy import imshow_field
 from tqdm import trange
 from matplotlib import pyplot as plt
 from .pyramid_optics import PyramidOptics
@@ -72,63 +74,71 @@ class SecondStageOptics:
 	def zernike_to_focal(self, zernike, amplitude):
 		return self.prop(self.phase_to_pupil(self.zernike_to_phase(zernike, amplitude)))
 
-	def pyramid_correction(self, num_iterations=10, dt=1./800, gain = 0.6, leakage = 0.999):
+	def wavefront_after_dm(self, t):
+		"""
+		Generates the wavefront after the DM at a time "t".
+		This uses the current shape of self.deformable_mirror
+		so just repeatedly calling it in open loop won't create cleaner wavefronts.
+  		"""
+		#get a clean wavefront
+		wf_in = self.wf.copy()
+		#evolve the atmospheric turbulence
+		self.layer.t = t
+		#pass the wavefront through the turbulence
+		wf_after_atmos = self.layer.forward(wf_in)
+		#pass the wavefront through the DM for correction
+		return self.deformable_mirror.forward(wf_after_atmos)
+
+
+	def pyramid_correction(self, num_iterations=200, dt=1./800, gain = 0.6, leakage = 0.999, plot=False):
 		"""
   		Soon this will be the general CL test and we'll be able to turn on one WFS or the other
     	"""
-		psfs = []
-		sr = []
+		correction_results = {
+			"wavefronts_after_dm" : [],
+			"dm_shapes" : [],
+			"point_spread_functions" : [],
+			"strehl_ratios" : [],
+			"phases_for" : []
+		}
 		self.layer.reset()
 		self.layer.t = 0
 		for timestep in trange(num_iterations):
-			#get a clean wavefront
-			wf_in = self.wf.copy()
-
-			#evolve the atmospheric turbulence
-			self.layer.t = timestep*dt
-
-			#pass the wavefront through the turbulence
-			wf_after_atmos = self.layer.forward(wf_in)
-
-			#pass the wavefront through the DM for correction
-			wf_after_dm = self.deformable_mirror.forward(wf_after_atmos)
-
-			#send the wavefront containing the residual wavefront error to the PyWFS and get slopes
+			wf_after_dm = self.wavefront_after_dm(timestep * dt)
 			wfs_image = self.pyramid_optics.readout(wf_after_dm)
 			diff_image = wfs_image - self.pyramid_optics.image_ref
-
-			#Leaky integrator to calculate new DM commands
 			self.deformable_mirror.actuators =  leakage*self.deformable_mirror.actuators - gain * self.pyramid_optics.command_matrix.dot(diff_image)
-
-			# Propagate to focal plane
 			wf_focal = self.focal_propagator.forward(wf_after_dm)
 
-			#calculate the strehl ratio to use as a metric for how well the AO system is performing.
+			correction_results["wavefronts_after_dm"].append(wf_after_dm)
+			correction_results["dm_shapes"].append(copy(self.deformable_mirror.surface))
+			correction_results["point_spread_functions"].append(wf_focal.copy())
 			strehl_foc = hc.get_strehl_from_focal(wf_focal.intensity/self.norm,self.im_ref.intensity/self.norm)
-			sr.append(float(strehl_foc))
-			psfs.append(wf_focal.copy())
-			
+			correction_results["strehl_ratios"].append(float(strehl_foc))
+			correction_results["phases_for"].append(self.layer.phase_for(self.wl))
+		
 		#plot the results
-		fig = plt.figure(figsize=(15,8))
+		if plot:
+			fig = plt.figure(figsize=(15,8))
 
-		plt.subplot(1,3,1)
-		plt.title(r'DM surface shape ($\mathrm{\mu}$m)')
-		hc.imshow_field(self.aperture*self.deformable_mirror.surface/(1e-6), vmin=-1, vmax=1, cmap='bwr')
-		plt.colorbar(fraction=0.046, pad=0.04)
+			plt.subplot(1,3,1)
+			plt.title(r'DM surface shape ($\mathrm{\mu}$m)')
+			hc.imshow_field(self.aperture*self.deformable_mirror.surface/(1e-6), vmin=-1, vmax=1, cmap='bwr')
+			plt.colorbar(fraction=0.046, pad=0.04)
 
-		plt.subplot(1,3,2)
-		plt.title('Residual wavefront error (rad)')
-		res = wf_after_dm.phase*self.aperture
-		hc.imshow_field(res, cmap='RdBu')
-		plt.colorbar(fraction=0.046, pad=0.04)
+			plt.subplot(1,3,2)
+			plt.title('Residual wavefront error (rad)')
+			res = wf_after_dm.phase*self.aperture
+			hc.imshow_field(res, cmap='RdBu')
+			plt.colorbar(fraction=0.046, pad=0.04)
 
-		plt.subplot(1,3,3)
-		plt.title('Focal Plane Image (Strehl = %.2f)'% (np.mean(np.asarray(sr))))
-		hc.imshow_field(np.log10(wf_focal.intensity/self.norm), cmap='inferno')
-		plt.colorbar(fraction=0.046, pad=0.04)
-		plt.tight_layout()
-		plt.show()
-		return psfs
+			plt.subplot(1,3,3)
+			plt.title('Focal Plane Image (Strehl = %.2f)'% (np.mean(np.asarray(sr))))
+			hc.imshow_field(np.log10(wf_focal.intensity/self.norm), cmap='inferno')
+			plt.colorbar(fraction=0.046, pad=0.04)
+			plt.tight_layout()
+			plt.show()
+		return correction_results # {k : np.array(correction_results[k]) for k in correction_results}
 
 
 	

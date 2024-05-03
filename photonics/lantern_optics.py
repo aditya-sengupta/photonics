@@ -7,6 +7,7 @@ from .utils import PROJECT_ROOT, date_now, is_list_or_dim1_array
 
 class LanternOptics:
 	def __init__(self, opt=None, f_number=None):
+		self.nports = 19 # update this later
 		if opt is None:
 			mesh_extent, mesh_spacing = 512, 1
 			self.telescope_diameter = 1
@@ -52,6 +53,7 @@ class LanternOptics:
 			self.pupil_grid = opt.pupil_grid
 			self.focal_grid = opt.focal_grid
 			self.prop = opt.focal_propagator
+			self.aperture = opt.aperture
    
 		self.load_outputs()
    
@@ -189,7 +191,7 @@ class LanternOptics:
 		coeffs = self.lantern_coeffs(self.zernike_to_focal(zernike, amplitude))
 		return np.abs(coeffs) ** 2
 	
-	def make_command_matrix(self, nzern=6):
+	def make_command_matrix(self, nzern=19):
 		poke_amplitude = 1e-10
 		pokes = []
 		for i in trange(1, nzern+1):
