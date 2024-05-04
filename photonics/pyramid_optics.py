@@ -20,7 +20,7 @@ class PyramidOptics:
 
         mld = 5
         modradius = mld * opt.wl / opt.telescope_diameter # modulation radius in radians
-        self.modsteps = 4 # needs to be a factor of 4
+        self.modsteps = 12 # needs to be a factor of 4
 
         pwfs = hc.PyramidWavefrontSensorOptics(opt.pupil_grid, pwfs_grid, separation=opt.telescope_diameter, wavelength_0=opt.wl)
         self.mpwfs = hc.ModulatedPyramidWavefrontSensorOptics(pwfs,modradius,self.modsteps)

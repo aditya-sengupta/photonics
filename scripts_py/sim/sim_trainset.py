@@ -9,7 +9,7 @@ from photonics.utils import DATA_PATH, datetime_now
 from os import path
 
 lo = LanternOptics(f_number=6.5)
-nzern = 9
+nzern = 19
 N = 60_000
 
 for lim in [0.12, 0.25, 0.5, 1.0]:
@@ -21,5 +21,7 @@ for lim in [0.12, 0.25, 0.5, 1.0]:
         lantern_coeffs[i] = lo.lantern_coeffs(lo.zernike_to_focal(zcoeffs, c))
 
     dtnow = datetime_now()
-    np.save(path.join(DATA_PATH, f"sim_trainset_amplitudes_{dtnow}.npy"), zamps)
-    np.save(path.join(DATA_PATH, f"sim_trainset_lanterns_{dtnow}.npy"), lantern_coeffs)
+    np.save(path.join(DATA_PATH, f"sim_trainsets/sim_trainset_amplitudes_{dtnow}.npy"), zamps)
+    np.save(path.join(DATA_PATH, f"sim_trainsets/sim_trainset_lanterns_{dtnow}.npy"), lantern_coeffs)
+
+# %%

@@ -4,6 +4,7 @@ from copy import copy
 from hcipy import imshow_field
 from tqdm import trange
 from matplotlib import pyplot as plt
+from .utils import rms
 from .pyramid_optics import PyramidOptics
 from .lantern_optics import LanternOptics
 
@@ -40,7 +41,7 @@ class SecondStageOptics:
 		self.norm = np.max(self.im_ref.intensity)
 		
 	def turbulence_setup(self):
-		fried_parameter = 0.13 # meters
+		fried_parameter = 0.5 # meters
 		outer_scale = 50 #  meters
 		velocity = 10. # wind speed in m/s.
 		Cn_squared = hc.Cn_squared_from_fried_parameter(fried_parameter)  #convert the fried parameter into Cn2
@@ -90,11 +91,12 @@ class SecondStageOptics:
 		return self.deformable_mirror.forward(wf_after_atmos)
 
 
-	def pyramid_correction(self, num_iterations=200, dt=1./800, gain = 0.6, leakage = 0.999, plot=False):
+	def pyramid_correction(self, num_iterations=200, dt=1./800, gain = 0.1, leakage = 0.999, plot=False):
 		"""
   		Soon this will be the general CL test and we'll be able to turn on one WFS or the other
     	"""
 		correction_results = {
+			"wavefront_after_dm_errors" : [],
 			"wavefronts_after_dm" : [],
 			"dm_shapes" : [],
 			"point_spread_functions" : [],
@@ -110,7 +112,8 @@ class SecondStageOptics:
 			self.deformable_mirror.actuators =  leakage*self.deformable_mirror.actuators - gain * self.pyramid_optics.command_matrix.dot(diff_image)
 			wf_focal = self.focal_propagator.forward(wf_after_dm)
 
-			correction_results["wavefronts_after_dm"].append(wf_after_dm)
+			correction_results["wavefront_after_dm_errors"].append(float(rms(wf_after_dm.phase * self.aperture)))
+			correction_results["wavefronts_after_dm"].append(wf_after_dm.copy())
 			correction_results["dm_shapes"].append(copy(self.deformable_mirror.surface))
 			correction_results["point_spread_functions"].append(wf_focal.copy())
 			strehl_foc = hc.get_strehl_from_focal(wf_focal.intensity/self.norm,self.im_ref.intensity/self.norm)

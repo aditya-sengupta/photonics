@@ -2,49 +2,57 @@
 # ask about adding this to default profile on threadripper
 %load_ext autoreload
 %autoreload 2
-
 # %%
 import os
 os.environ.__delitem__("CONDA_PREFIX")
-
-def lmap(f, x):
-    return list(map(f, x))
-
 # %%
 import numpy as np
 import hcipy as hc
 from matplotlib import pyplot as plt
 from hcipy import imshow_field
 from photonics import DATA_PATH
+from photonics.utils import rms, lmap
 from photonics.second_stage_optics import SecondStageOptics
 from juliacall import Main as jl
 jl.seval("using Flux")
 jl.seval("using JLD2")
-
-rms = lambda x: np.sqrt(np.mean(x ** 2))
 # %%
 sso = SecondStageOptics()
 correction_results = sso.pyramid_correction(gain=0.1)
-dm_phase_screens = [x * 2 * np.pi / (sso.wl) for x in correction_results["dm_shapes"]]
-second_stage_phase_screens = [p - d for (p, d) in zip(correction_results["phases_for"], dm_phase_screens)]
-lantern_inputs = correction_results["point_spread_functions"] 
-second_stage_aperture_phase_screens = [sso.aperture * s for s in second_stage_phase_screens]
-zernike_basis = hc.mode_basis.make_zernike_basis(9, sso.telescope_diameter, sso.pupil_grid)
+# %%
+#dm_phase_screens = [x * 2 * np.pi / (sso.wl) for x in correction_results["dm_shapes"]]
+#second_stage_phase_screens = [p - d for (p, d) in zip(correction_results["phases_for"], dm_phase_screens)]
+second_stage_phase_screens = [(x.phase - np.mean(x.phase)) * sso.aperture for x in correction_results["wavefronts_after_dm"]]
+lantern_inputs = correction_results["point_spread_functions"]
+
 # %%
 rms_errors = lmap(rms, second_stage_phase_screens)
-print(f"RMS error mean {np.mean(rms_errors):.2f} ± {np.std(rms_errors):.2f} rad")
+print(f"RMS error {np.mean(rms_errors):.2f} ± {np.std(rms_errors):.2f} rad")
 # %%
-model_state = jl.JLD2.load(DATA_PATH + "/pl_nn/pl_nn_0.25.jld2", "model_state")
-model = jl.Chain(
-    jl.Dense(19, 2000, jl.relu),
-    jl.Dense(2000, 100, jl.relu),
-    jl.Dense(100, 9)
-)
+max_amp_nn = 0.5
+model_fname = f"pl_nn_{max_amp_nn}"
+model_state = jl.JLD2.load(DATA_PATH + f"/pl_nn/{model_fname}.jld2", "model_state")
+if model_fname.endswith("19"):
+    nzern = 19
+    model = jl.Chain(
+        jl.Dense(19, 2000, jl.relu),
+        jl.Dense(2000, 100, jl.relu),
+        jl.Dropout(0.2),
+        jl.Dense(100, 19)
+    )
+else:
+    nzern = 9
+    model = jl.Chain(
+        jl.Dense(19, 2000, jl.relu),
+        jl.Dense(2000, 100, jl.relu),
+        jl.Dense(100, 9)
+    )
+
 jl.Flux.loadmodel_b(model, model_state)
-ymin, ymax = (lambda x: (np.min(x), np.max(x)))(np.abs(np.load(DATA_PATH + "/sim_trainsets/sim_trainset_lanterns_240428_1706.npy")) ** 2)
+ymin, ymax = (lambda x: (np.min(x), np.max(x)))(np.abs(np.load(DATA_PATH + "/sim_trainsets/sim_trainset_lanterns_240502_1947.npy")) ** 2)
+zernike_basis = hc.mode_basis.make_zernike_basis(nzern, sso.telescope_diameter, sso.pupil_grid)
 # %%
-def nn_inject_recover(amplitudes):
-    zernikes = np.arange(1, len(amplitudes) + 1)
+def nn_inject_recover(zernikes, amplitudes):
     phase_screen = sso.zernike_to_phase(zernikes, amplitudes)
     psf = sso.focal_propagator(
         hc.Wavefront(sso.aperture * np.exp(1j * phase_screen), sso.wl)
@@ -60,24 +68,30 @@ def reconstruct(phase_screen, plot=True):
     """
     Takes in a post-DM phase screen and injects and recovers it from the lantern.
     """
+    phase_screen_coeffs = zernike_basis.coefficients_for(phase_screen - np.mean(phase_screen))
+    phase_screen_projected = zernike_basis.linear_combination(phase_screen_coeffs)
     psf = sso.focal_propagator(
-        hc.Wavefront(sso.aperture * np.exp(1j * phase_screen), sso.wl)
+        hc.Wavefront(sso.aperture * np.exp(1j * phase_screen_projected), sso.wl)
     )
     post_lantern_coeffs = sso.lantern_optics.lantern_coeffs(psf)
     intensities = np.abs(post_lantern_coeffs) ** 2
     norm_intensities = ((intensities - ymin) / (ymax - ymin)).astype(np.float32)
     reconstructed_zernike_coeffs = model(norm_intensities) 
     # sso.lantern_optics.command_matrix @ (np.abs(post_lantern_coeffs) ** 2 - sso.lantern_optics.flat_amp)
-    reconstructed_phase = zernike_basis.linear_combination(0.5 * np.array(reconstructed_zernike_coeffs) - 0.25)
+    reconstructed_phase = zernike_basis.linear_combination(max_amp_nn * np.array(reconstructed_zernike_coeffs) - max_amp_nn/2)
     
     if plot:
         fig, axs = plt.subplots(1, 3)
+        projected_zeroed = phase_screen_projected - np.mean(phase_screen_projected)
+        reconstructed_zeroed = reconstructed_phase - np.mean(reconstructed_phase)
+        vmin = np.minimum(np.min(projected_zeroed), np.min(reconstructed_zeroed))
+        vmax = np.maximum(np.max(projected_zeroed), np.max(reconstructed_zeroed))
         imshow_field(np.log10(psf.intensity), ax=axs[0])
-        imshow_field(phase_screen, ax=axs[1])
-        imshow_field(reconstructed_phase, ax=axs[2])
+        imshow_field(projected_zeroed, ax=axs[1], vmin=vmin, vmax=vmax)
+        imshow_field(reconstructed_zeroed, ax=axs[2], vmin=vmin, vmax=vmax)
         plt.show()
         
 # %%
 for i in range(0, 200, 20):
-    reconstruct(second_stage_aperture_phase_screens[i])
+    reconstruct(second_stage_phase_screens[i])
 # %%
