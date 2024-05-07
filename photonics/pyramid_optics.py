@@ -10,9 +10,6 @@ class PyramidOptics:
         Make a pyramid wavefront sensor based on an optical setup (SecondStageOptics).
         """
         self.wl = opt.wl
-        self.telescope_diameter = opt.telescope_diameter
-        self.pupil_grid = opt.pupil_grid
-        self.aperture = aperture
         self.setup(opt)
         self.make_command_matrix(opt)
 
@@ -39,7 +36,7 @@ class PyramidOptics:
         img /= img.sum()
         return img
         
-    def make_command_matrix(self, opt, rerun=False):
+    def make_command_matrix(self, opt, rerun=True):
         cmd_path = PROJECT_ROOT + f"/data/secondstage_pyramid/cm_{date_now()}.npy"
         if (not rerun) and os.path.exists(cmd_path):
             self.command_matrix = np.load(cmd_path)
@@ -47,21 +44,16 @@ class PyramidOptics:
             probe_amp = 0.01 * self.wl
             num_modes = opt.deformable_mirror.num_actuators
             slopes = []
-            zernikes = hc.mode_basis.make_zernike_basis(num_modes, self.telescope_diameter, self.pupil_grid)
 
             for ind in trange(num_modes):
                 slope = 0
 
                 # Probe the phase response
                 for s in [1, -1]:
-                    aberrated_wavefront = hc.Wavefront(
-                        hc.Field(
-                            self.aperture * np.exp(1j * s * probe_amp * zernikes[ind]), 
-                            self.pupil_grid
-                        ), 
-                        wavelength=opt.wl
-                    )
-                    dm_wf = opt.deformable_mirror.forward(aberrated_wavefront)
+                    amp = np.zeros((num_modes,))
+                    amp[ind] = s * probe_amp
+                    opt.deformable_mirror.actuators = amp
+                    dm_wf = opt.deformable_mirror.forward(opt.wf)
                     image = self.readout(dm_wf)
                     slope += s * (image-self.image_ref)/(2 * probe_amp)
 

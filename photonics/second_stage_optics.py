@@ -46,8 +46,11 @@ class SecondStageOptics:
 	def dm_setup(self):
 		#make the DM
 		num_actuators = 9
-		modes = hc.make_zernike_basis(num_actuators ** 2, self.telescope_diameter, self.pupil_grid, starting_mode=2)
-		self.deformable_mirror = hc.DeformableMirror(modes)
+		actuator_spacing = self.telescope_diameter / num_actuators
+		influence_functions = hc.make_gaussian_influence_functions(self.pupil_grid, num_actuators, actuator_spacing)
+		self.deformable_mirror = hc.DeformableMirror(influence_functions)
+		#modes = hc.make_zernike_basis(num_actuators ** 2, self.telescope_diameter, self.pupil_grid, starting_mode=2)
+		#self.deformable_mirror = hc.DeformableMirror(modes)
 	
 	# awful design. Need a refactor so these don't also live in lanternoptics, after I've got GS working.
 	def zernike_to_phase(self, zernike, amplitude):

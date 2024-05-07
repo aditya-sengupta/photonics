@@ -16,7 +16,7 @@ sso = SecondStageOptics()
 zernike_basis = hc.mode_basis.make_zernike_basis(nzern, sso.telescope_diameter, sso.pupil_grid)
 # %%
 nstep = 200
-f_loop = 100 # Hz
+f_loop = 800 # Hz
 correction_results = sso.pyramid_correction(num_iterations=nstep, dt=1/f_loop)
 # %%
 focal_plane_coeffs_over_time = np.array([np.array(zernike_basis.coefficients_for(x.phase)) for x in correction_results["wavefronts_after_dm"]])
@@ -28,4 +28,6 @@ a = np.exp(-2 * np.pi * f_cutoff / f_loop)
 for i in range(1, nstep):
     focal_plane_low_pass[i] = a * focal_plane_low_pass[i] + (1-a) * focal_plane_coeffs_over_time[i-1]
     focal_plane_high_pass[i] = focal_plane_coeffs_over_time[i] - (a * focal_plane_high_pass[i-1] + (1-a) * focal_plane_coeffs_over_time[i-1])
+# %%
+correction_results["pyramid_readings"]
 # %%
