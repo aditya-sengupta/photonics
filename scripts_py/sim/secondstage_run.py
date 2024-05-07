@@ -1,34 +1,24 @@
 # %%
-# ask about adding this to default profile on threadripper
-%load_ext autoreload
-%autoreload 2
-# %%
+from IPython import get_ipython
+get_ipython().run_line_magic("load_ext", "autoreload")
+get_ipython().run_line_magic("autoreload", "2")
 import os
-os.environ.__delitem__("CONDA_PREFIX")
-# %%
+if "CONDA_PREFIX" in os.environ:
+    os.environ.__delitem__("CONDA_PREFIX")
+
 import numpy as np
 import hcipy as hc
+from copy import copy
 from matplotlib import pyplot as plt
 from hcipy import imshow_field
 from photonics import DATA_PATH
-from photonics.utils import rms, lmap
+from photonics.utils import rms, nanify
 from photonics.second_stage_optics import SecondStageOptics
 from juliacall import Main as jl
 jl.seval("using Flux")
 jl.seval("using JLD2")
 # %%
 sso = SecondStageOptics()
-correction_results = sso.pyramid_correction(gain=0.1)
-# %%
-#dm_phase_screens = [x * 2 * np.pi / (sso.wl) for x in correction_results["dm_shapes"]]
-#second_stage_phase_screens = [p - d for (p, d) in zip(correction_results["phases_for"], dm_phase_screens)]
-second_stage_phase_screens = [(x.phase - np.mean(x.phase)) * sso.aperture for x in correction_results["wavefronts_after_dm"]]
-lantern_inputs = correction_results["point_spread_functions"]
-
-# %%
-rms_errors = lmap(rms, second_stage_phase_screens)
-print(f"RMS error {np.mean(rms_errors):.2f} ± {np.std(rms_errors):.2f} rad")
-# %%
 max_amp_nn = 0.5
 model_fname = f"pl_nn_{max_amp_nn}"
 model_state = jl.JLD2.load(DATA_PATH + f"/pl_nn/{model_fname}.jld2", "model_state")
@@ -51,7 +41,7 @@ else:
 jl.Flux.loadmodel_b(model, model_state)
 ymin, ymax = (lambda x: (np.min(x), np.max(x)))(np.abs(np.load(DATA_PATH + "/sim_trainsets/sim_trainset_lanterns_240502_1947.npy")) ** 2)
 zernike_basis = hc.mode_basis.make_zernike_basis(nzern, sso.telescope_diameter, sso.pupil_grid)
-# %%
+
 def nn_inject_recover(zernikes, amplitudes):
     phase_screen = sso.zernike_to_phase(zernikes, amplitudes)
     psf = sso.focal_propagator(
@@ -62,8 +52,7 @@ def nn_inject_recover(zernikes, amplitudes):
     norm_intensities = ((intensities - ymin) / (ymax - ymin)).astype(np.float32)
     reconstructed_zernike_coeffs = np.array(model(norm_intensities)) * 0.5 - 0.25
     return reconstructed_zernike_coeffs
-    
-# %%
+
 def reconstruct(phase_screen, plot=True):
     """
     Takes in a post-DM phase screen and injects and recovers it from the lantern.
@@ -81,17 +70,28 @@ def reconstruct(phase_screen, plot=True):
     reconstructed_phase = zernike_basis.linear_combination(max_amp_nn * np.array(reconstructed_zernike_coeffs) - max_amp_nn/2)
     
     if plot:
-        fig, axs = plt.subplots(1, 3)
-        projected_zeroed = phase_screen_projected - np.mean(phase_screen_projected)
-        reconstructed_zeroed = reconstructed_phase - np.mean(reconstructed_phase)
-        vmin = np.minimum(np.min(projected_zeroed), np.min(reconstructed_zeroed))
-        vmax = np.maximum(np.max(projected_zeroed), np.max(reconstructed_zeroed))
-        imshow_field(np.log10(psf.intensity), ax=axs[0])
+        _, axs = plt.subplots(1, 3)
+        for ax in axs:
+            ax.axis('off')
+        projected_zeroed = nanify(phase_screen_projected)
+        reconstructed_zeroed = nanify(reconstructed_phase)
+        vmin = np.minimum(np.nanmin(projected_zeroed), np.nanmin(reconstructed_zeroed))
+        vmax = np.maximum(np.nanmax(projected_zeroed), np.nanmax(reconstructed_zeroed))
+        imshow_field(np.log10(psf.intensity / sso.norm), ax=axs[0], vmin=-5)
+        axs[0].set_title("PSF")
         imshow_field(projected_zeroed, ax=axs[1], vmin=vmin, vmax=vmax)
+        axs[1].set_title(f"PL input phase, {rms(phase_screen_coeffs):.2f} rad", fontsize=10)
         imshow_field(reconstructed_zeroed, ax=axs[2], vmin=vmin, vmax=vmax)
+        axs[2].set_title("PL recon. phase", fontsize=10)
         plt.show()
         
 # %%
+r0 = 0.1
+sso.turbulence_setup(fried_parameter=r0)
+correction_results = sso.pyramid_correction()
+second_stage_phase_screens = [x.phase * sso.aperture for x in correction_results["wavefronts_after_dm"]]
+print(f"Second-stage WF reconstruction, r0 = {r0} m")
 for i in range(0, 200, 20):
     reconstruct(second_stage_phase_screens[i])
+
 # %%

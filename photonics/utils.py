@@ -43,7 +43,8 @@ def angles_relative_to_center(x, y):
 def lmap(f, x):
     return list(map(f, x))
 
-def add_nans_to_phase(screen, aperture):
-    screen2 = copy(screen)
-    screen2[np.where(aperture == 0)] = np.nan
-    return screen2
+def nanify(phase_screen):
+    x = copy(phase_screen)
+    x = x - np.mean(x)
+    x[np.where(sso.aperture == 0)] = np.nan
+    return hc.Field(x, phase_screen.grid)

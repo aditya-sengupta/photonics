@@ -1,7 +1,6 @@
 import numpy as np
 import hcipy as hc
 from copy import copy
-from hcipy import imshow_field
 from tqdm import trange
 from matplotlib import pyplot as plt
 from .utils import rms
@@ -40,21 +39,15 @@ class SecondStageOptics:
 		self.im_ref = self.focal_propagator.forward(self.wf)
 		self.norm = np.max(self.im_ref.intensity)
 		
-	def turbulence_setup(self):
-		fried_parameter = 0.5 # meters
-		outer_scale = 50 #  meters
-		velocity = 10. # wind speed in m/s.
+	def turbulence_setup(self, fried_parameter=0.1, outer_scale=50, velocity=10.):
 		Cn_squared = hc.Cn_squared_from_fried_parameter(fried_parameter)  #convert the fried parameter into Cn2
-
-		# make our atmospheric turbulence layer
 		self.layer = hc.InfiniteAtmosphericLayer(self.pupil_grid, Cn_squared, outer_scale, velocity)
 		
 	def dm_setup(self):
 		#make the DM
 		num_actuators = 9
-		actuator_spacing = self.telescope_diameter / num_actuators
-		influence_functions = hc.make_gaussian_influence_functions(self.pupil_grid, num_actuators, actuator_spacing)
-		self.deformable_mirror = hc.DeformableMirror(influence_functions)
+		modes = hc.make_zernike_basis(num_actuators ** 2, self.telescope_diameter, self.pupil_grid, starting_mode=2)
+		self.deformable_mirror = hc.DeformableMirror(modes)
 	
 	# awful design. Need a refactor so these don't also live in lanternoptics, after I've got GS working.
 	def zernike_to_phase(self, zernike, amplitude):
@@ -81,15 +74,10 @@ class SecondStageOptics:
 		This uses the current shape of self.deformable_mirror
 		so just repeatedly calling it in open loop won't create cleaner wavefronts.
   		"""
-		#get a clean wavefront
 		wf_in = self.wf.copy()
-		#evolve the atmospheric turbulence
 		self.layer.t = t
-		#pass the wavefront through the turbulence
 		wf_after_atmos = self.layer.forward(wf_in)
-		#pass the wavefront through the DM for correction
 		return self.deformable_mirror.forward(wf_after_atmos)
-
 
 	def pyramid_correction(self, num_iterations=200, dt=1./800, gain = 0.1, leakage = 0.999, plot=False):
 		"""
@@ -98,6 +86,7 @@ class SecondStageOptics:
 		correction_results = {
 			"wavefront_after_dm_errors" : [],
 			"wavefronts_after_dm" : [],
+			"pyramid_readings" : [],
 			"dm_shapes" : [],
 			"point_spread_functions" : [],
 			"strehl_ratios" : [],
@@ -109,14 +98,16 @@ class SecondStageOptics:
 			wf_after_dm = self.wavefront_after_dm(timestep * dt)
 			wfs_image = self.pyramid_optics.readout(wf_after_dm)
 			diff_image = wfs_image - self.pyramid_optics.image_ref
-			self.deformable_mirror.actuators =  leakage*self.deformable_mirror.actuators - gain * self.pyramid_optics.command_matrix.dot(diff_image)
+			pyramid_reading = self.pyramid_optics.command_matrix.dot(diff_image)
+			self.deformable_mirror.actuators = leakage*self.deformable_mirror.actuators - gain*pyramid_reading
 			wf_focal = self.focal_propagator.forward(wf_after_dm)
+			strehl_foc = hc.get_strehl_from_focal(wf_focal.intensity/self.norm,self.im_ref.intensity/self.norm)
 
 			correction_results["wavefront_after_dm_errors"].append(float(rms(wf_after_dm.phase * self.aperture)))
 			correction_results["wavefronts_after_dm"].append(wf_after_dm.copy())
+			correction_results["pyramid_readings"].append(pyramid_reading)
 			correction_results["dm_shapes"].append(copy(self.deformable_mirror.surface))
 			correction_results["point_spread_functions"].append(wf_focal.copy())
-			strehl_foc = hc.get_strehl_from_focal(wf_focal.intensity/self.norm,self.im_ref.intensity/self.norm)
 			correction_results["strehl_ratios"].append(float(strehl_foc))
 			correction_results["phases_for"].append(self.layer.phase_for(self.wl))
 		
@@ -136,7 +127,7 @@ class SecondStageOptics:
 			plt.colorbar(fraction=0.046, pad=0.04)
 
 			plt.subplot(1,3,3)
-			plt.title('Focal Plane Image (Strehl = %.2f)'% (np.mean(np.asarray(sr))))
+			plt.title('Focal Plane Image (Strehl = %.2f)'% (np.mean(np.asarray(correction_results["strehl_ratios"]))))
 			hc.imshow_field(np.log10(wf_focal.intensity/self.norm), cmap='inferno')
 			plt.colorbar(fraction=0.046, pad=0.04)
 			plt.tight_layout()
