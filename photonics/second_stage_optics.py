@@ -8,7 +8,11 @@ from .pyramid_optics import PyramidOptics
 from .lantern_optics import LanternOptics
 
 class SecondStageOptics:
-	def __init__(self, lantern_fnumber=6.5):
+	def __init__(self, lantern_fnumber=6.5, n_filter=9, f_cutoff=30, f_loop=100):
+		self.n_filter = n_filter
+		self.ss_a = np.exp(-2 * np.pi * f_cutoff / f_loop)
+		self.f_loop = f_loop
+		self.dt = 1 / f_loop
 		self.optics_setup(lantern_fnumber)
 		self.turbulence_setup()
 		self.dm_setup()
@@ -39,18 +43,20 @@ class SecondStageOptics:
 		self.im_ref = self.focal_propagator.forward(self.wf)
 		self.norm = np.max(self.im_ref.intensity)
 		
-	def turbulence_setup(self, fried_parameter=0.1, outer_scale=50, velocity=10.):
+	def turbulence_setup(self, fried_parameter=0.1, outer_scale=50, velocity=10.0):
 		Cn_squared = hc.Cn_squared_from_fried_parameter(fried_parameter)  #convert the fried parameter into Cn2
 		self.layer = hc.InfiniteAtmosphericLayer(self.pupil_grid, Cn_squared, outer_scale, velocity)
 		
-	def dm_setup(self):
+	def dm_setup(self, zonal=True):
 		#make the DM
 		num_actuators = 9
-		actuator_spacing = self.telescope_diameter / num_actuators
-		influence_functions = hc.make_gaussian_influence_functions(self.pupil_grid, num_actuators, actuator_spacing)
-		self.deformable_mirror = hc.DeformableMirror(influence_functions)
-		#modes = hc.make_zernike_basis(num_actuators ** 2, self.telescope_diameter, self.pupil_grid, starting_mode=2)
-		#self.deformable_mirror = hc.DeformableMirror(modes)
+		if zonal:
+			actuator_spacing = self.telescope_diameter / num_actuators
+			influence_functions = hc.make_gaussian_influence_functions(self.pupil_grid, num_actuators, actuator_spacing)
+			self.deformable_mirror = hc.DeformableMirror(influence_functions)
+		else:
+			modes = hc.make_zernike_basis(num_actuators ** 2, self.telescope_diameter, self.pupil_grid, starting_mode=2)
+			self.deformable_mirror = hc.DeformableMirror(modes)
 	
 	# awful design. Need a refactor so these don't also live in lanternoptics, after I've got GS working.
 	def zernike_to_phase(self, zernike, amplitude):
@@ -82,7 +88,7 @@ class SecondStageOptics:
 		wf_after_atmos = self.layer.forward(wf_in)
 		return self.deformable_mirror.forward(wf_after_atmos)
 
-	def pyramid_correction(self, num_iterations=200, dt=1./800, gain = 0.1, leakage = 0.999, plot=False):
+	def pyramid_correction(self, num_iterations=200, gain = 0.1, leakage = 0.999, plot=False):
 		"""
   		Soon this will be the general CL test and we'll be able to turn on one WFS or the other
     	"""
@@ -98,19 +104,17 @@ class SecondStageOptics:
 		self.layer.reset()
 		self.layer.t = 0
 		for timestep in trange(num_iterations):
-			wf_after_dm = self.wavefront_after_dm(timestep * dt)
-			wfs_image = self.pyramid_optics.readout(wf_after_dm)
-			diff_image = wfs_image - self.pyramid_optics.image_ref
-			pyramid_reading = self.pyramid_optics.command_matrix.dot(diff_image)
-			self.deformable_mirror.actuators = leakage*self.deformable_mirror.actuators - gain*pyramid_reading
+			wf_after_dm = self.wavefront_after_dm(timestep * self.dt)
+			pyramid_reading = self.pyramid_optics.reconstruct(wf_after_dm)
+			self.deformable_mirror.actuators = leakage * self.deformable_mirror.actuators - gain * pyramid_reading
 			wf_focal = self.focal_propagator.forward(wf_after_dm)
-			strehl_foc = hc.get_strehl_from_focal(wf_focal.intensity/self.norm,self.im_ref.intensity/self.norm)
 
 			correction_results["wavefront_after_dm_errors"].append(float(rms(wf_after_dm.phase * self.aperture)))
 			correction_results["wavefronts_after_dm"].append(wf_after_dm.copy())
 			correction_results["pyramid_readings"].append(pyramid_reading)
 			correction_results["dm_shapes"].append(copy(self.deformable_mirror.surface))
 			correction_results["point_spread_functions"].append(wf_focal.copy())
+			strehl_foc = hc.get_strehl_from_focal(wf_focal.intensity/self.norm,self.im_ref.intensity/self.norm)
 			correction_results["strehl_ratios"].append(float(strehl_foc))
 			correction_results["phases_for"].append(self.layer.phase_for(self.wl))
 		
