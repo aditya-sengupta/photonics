@@ -3,6 +3,7 @@ import numpy as np
 import os
 from os import path
 from copy import copy
+from hcipy import Field
 
 PROJECT_ROOT = path.dirname(path.dirname(path.abspath(__file__)))
 DATA_PATH = path.join(PROJECT_ROOT, "data")
@@ -43,8 +44,8 @@ def angles_relative_to_center(x, y):
 def lmap(f, x):
     return list(map(f, x))
 
-def nanify(phase_screen):
+def nanify(phase_screen, aperture):
     x = copy(phase_screen)
     x = x - np.mean(x)
-    x[np.where(sso.aperture == 0)] = np.nan
-    return hc.Field(x, phase_screen.grid)
+    x[np.where(aperture == 0)] = np.nan
+    return Field(x, phase_screen.grid)

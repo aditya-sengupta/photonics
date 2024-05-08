@@ -9,15 +9,15 @@ from .lantern_optics import LanternOptics
 from .wfs_filter import WFSFilter
 
 class SecondStageOptics:
-	def __init__(self, lantern_fnumber=6.5, n_filter=9, f_cutoff=30, f_loop=100):
+	def __init__(self, lantern_fnumber=6.5, n_filter=9, f_cutoff=30, f_loop=100, dm_basis="zonal"):
 		a = np.exp(-2 * np.pi * f_cutoff / f_loop)
 		self.wfs_filter = WFSFilter(n_filter, a)
 		self.f_loop = f_loop
 		self.dt = 1 / f_loop
 		self.optics_setup(lantern_fnumber)
 		self.turbulence_setup()
-		self.dm_setup()
-		self.pyramid_optics = PyramidOptics(self)
+		self.dm_setup(dm_basis)
+		self.pyramid_optics = PyramidOptics(self, dm_basis)
 		self.lantern_optics = LanternOptics(self)
 		
 	def optics_setup(self, lantern_fnumber=6.5):
@@ -44,21 +44,23 @@ class SecondStageOptics:
 		self.im_ref = self.focal_propagator.forward(self.wf)
 		self.norm = np.max(self.im_ref.intensity)
 		
-	def turbulence_setup(self, fried_parameter=0.1, outer_scale=50, velocity=10.0):
-		Cn_squared = hc.Cn_squared_from_fried_parameter(fried_parameter)  #convert the fried parameter into Cn2
-		self.layer = hc.InfiniteAtmosphericLayer(self.pupil_grid, Cn_squared, outer_scale, velocity)
+	def turbulence_setup(self, fried_parameter=0.5, outer_scale=50, velocity=10.0, seed=1):
+		Cn_squared = hc.Cn_squared_from_fried_parameter(fried_parameter)
+		self.layer = hc.InfiniteAtmosphericLayer(self.pupil_grid, Cn_squared, outer_scale, velocity, seed=seed)
 		
-	def dm_setup(self, zonal=False):
+	def dm_setup(self, dm_basis):
 		#make the DM
 		num_actuators = 9
-		if zonal:
+		if dm_basis == "zonal":
 			actuator_spacing = self.telescope_diameter / num_actuators
 			influence_functions = hc.make_gaussian_influence_functions(self.pupil_grid, num_actuators, actuator_spacing)
 			self.deformable_mirror = hc.DeformableMirror(influence_functions)
-		else:
+		elif dm_basis == "modal":
 			modes = hc.make_zernike_basis(num_actuators ** 2, self.telescope_diameter, self.pupil_grid, starting_mode=2)
 			self.deformable_mirror = hc.DeformableMirror(modes)
-	
+		else:
+			raise NameError("DM basis needs to be zonal or modal")
+ 
 	# awful design. Need a refactor so these don't also live in lanternoptics, after I've got GS working.
 	def zernike_to_phase(self, zernike, amplitude):
 		if isinstance(zernike, list) and isinstance(amplitude, list):
@@ -89,7 +91,7 @@ class SecondStageOptics:
 		wf_after_atmos = self.layer.forward(wf_in)
 		return self.deformable_mirror.forward(wf_after_atmos)
 
-	def pyramid_correction(self, num_iterations=200, gain = 0.1, leakage = 0.999, plot=False, do_filter=True):
+	def pyramid_correction(self, num_iterations=200, gain = 0.1, leakage = 0.999, plot=False, do_filter=False):
 		"""
   		Soon this will be the general CL test and we'll be able to turn on one WFS or the other
     	"""

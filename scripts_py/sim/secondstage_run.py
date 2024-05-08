@@ -12,7 +12,7 @@ from copy import copy
 from matplotlib import pyplot as plt
 from hcipy import imshow_field
 from photonics import DATA_PATH
-from photonics.utils import rms, nanify
+from photonics.utils import rms, nanify, lmap
 from photonics.second_stage_optics import SecondStageOptics
 from juliacall import Main as jl
 jl.seval("using Flux")
@@ -73,8 +73,8 @@ def reconstruct(phase_screen, plot=True):
         _, axs = plt.subplots(1, 3)
         for ax in axs:
             ax.axis('off')
-        projected_zeroed = nanify(phase_screen_projected)
-        reconstructed_zeroed = nanify(reconstructed_phase)
+        projected_zeroed = nanify(phase_screen_projected, sso.aperture)
+        reconstructed_zeroed = nanify(reconstructed_phase, sso.aperture)
         vmin = np.minimum(np.nanmin(projected_zeroed), np.nanmin(reconstructed_zeroed))
         vmax = np.maximum(np.nanmax(projected_zeroed), np.nanmax(reconstructed_zeroed))
         imshow_field(np.log10(psf.intensity / sso.norm), ax=axs[0], vmin=-5)
@@ -88,7 +88,12 @@ def reconstruct(phase_screen, plot=True):
 # %%
 r0 = 0.1
 sso.turbulence_setup(fried_parameter=r0)
-correction_results = sso.pyramid_correction()
+# %%
+sso.layer.reset()
+sso.deformable_mirror.flatten()
+correction_results = sso.pyramid_correction(num_iterations=10)
+correction_results["strehl_ratios"]
+# %%
 second_stage_phase_screens = [x.phase * sso.aperture for x in correction_results["wavefronts_after_dm"]]
 print(f"Second-stage WF reconstruction, r0 = {r0} m")
 for i in range(0, 200, 20):

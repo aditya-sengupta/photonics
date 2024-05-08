@@ -7,9 +7,7 @@ class WFSFilter:
     def __init__(self, n, a):
         self.n = n
         self.a = a
-        self.last_hpf = np.zeros(n)
-        self.last_lpf = np.zeros(n)
-        self.last_inp = np.zeros(n)
+        self.reset()
         
     def __call__(self, inp):
         hpf = inp - (self.a * self.last_hpf + (1 - self.a) * self.last_inp)
@@ -17,4 +15,7 @@ class WFSFilter:
         self.last_hpf, self.last_lpf, self.last_inp = hpf, lpf, inp
         return hpf, lpf
         
-    
+    def reset(self):
+        self.last_hpf = np.zeros(self.n)
+        self.last_lpf = np.zeros(self.n)
+        self.last_inp = np.zeros(self.n)
