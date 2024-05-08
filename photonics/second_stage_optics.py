@@ -6,11 +6,12 @@ from matplotlib import pyplot as plt
 from .utils import rms
 from .pyramid_optics import PyramidOptics
 from .lantern_optics import LanternOptics
+from .wfs_filter import WFSFilter
 
 class SecondStageOptics:
 	def __init__(self, lantern_fnumber=6.5, n_filter=9, f_cutoff=30, f_loop=100):
-		self.n_filter = n_filter
-		self.ss_a = np.exp(-2 * np.pi * f_cutoff / f_loop)
+		a = np.exp(-2 * np.pi * f_cutoff / f_loop)
+		self.wfs_filter = WFSFilter(n_filter, a)
 		self.f_loop = f_loop
 		self.dt = 1 / f_loop
 		self.optics_setup(lantern_fnumber)
@@ -47,7 +48,7 @@ class SecondStageOptics:
 		Cn_squared = hc.Cn_squared_from_fried_parameter(fried_parameter)  #convert the fried parameter into Cn2
 		self.layer = hc.InfiniteAtmosphericLayer(self.pupil_grid, Cn_squared, outer_scale, velocity)
 		
-	def dm_setup(self, zonal=True):
+	def dm_setup(self, zonal=False):
 		#make the DM
 		num_actuators = 9
 		if zonal:
@@ -88,7 +89,7 @@ class SecondStageOptics:
 		wf_after_atmos = self.layer.forward(wf_in)
 		return self.deformable_mirror.forward(wf_after_atmos)
 
-	def pyramid_correction(self, num_iterations=200, gain = 0.1, leakage = 0.999, plot=False):
+	def pyramid_correction(self, num_iterations=200, gain = 0.1, leakage = 0.999, plot=False, do_filter=True):
 		"""
   		Soon this will be the general CL test and we'll be able to turn on one WFS or the other
     	"""
@@ -106,9 +107,11 @@ class SecondStageOptics:
 		for timestep in trange(num_iterations):
 			wf_after_dm = self.wavefront_after_dm(timestep * self.dt)
 			pyramid_reading = self.pyramid_optics.reconstruct(wf_after_dm)
+			if do_filter:
+				hpf_reading, lpf_reading = self.wfs_filter(pyramid_reading[:self.wfs_filter.n])
+				pyramid_reading[:self.wfs_filter.n] = hpf_reading
 			self.deformable_mirror.actuators = leakage * self.deformable_mirror.actuators - gain * pyramid_reading
 			wf_focal = self.focal_propagator.forward(wf_after_dm)
-
 			correction_results["wavefront_after_dm_errors"].append(float(rms(wf_after_dm.phase * self.aperture)))
 			correction_results["wavefronts_after_dm"].append(wf_after_dm.copy())
 			correction_results["pyramid_readings"].append(pyramid_reading)

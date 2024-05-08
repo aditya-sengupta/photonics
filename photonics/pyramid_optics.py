@@ -12,10 +12,6 @@ class PyramidOptics:
         self.wl = opt.wl
         self.setup(opt)
         self.make_command_matrix(opt)
-        self.n_filter = opt.n_filter
-        self.ss_a = opt.ss_a  
-        self.last_orig_recon = np.zeros(self.n_filter)
-        self.last_hpf_recon = np.zeros(self.n_filter)
 
     def setup(self, opt):
         # set up pyramid wavefront sensor
@@ -67,11 +63,7 @@ class PyramidOptics:
             self.command_matrix = hc.inverse_tikhonov(slopes.transformation_matrix, rcond=1e-3, svd=None)
             np.save(PROJECT_ROOT + f"/data/secondstage_pyramid/cm_{date_now()}.npy", self.command_matrix)
     
-    def reconstruct(self, wf, hpf=False):
+    def reconstruct(self, wf):
         img = self.readout(wf)
-        response = self.command_matrix @ (img - self.image_ref)
-        if hpf:
-            # apply the high-pass filter and 
-            response[:self.n_hpf], self.last_orig_recon = response[:self.n_hpf] - (self.ss_a * self.last_hpf_recon + (1 - self.ss_a) * self.last_orig_recon), np.copy(response[:self.n_hpf])
-            self.last_hpf_recon = np.copy(response[:self.n_hpf])
-        return response
+        return self.command_matrix.dot(img-self.image_ref)
+    
