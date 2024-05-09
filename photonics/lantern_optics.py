@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import hcipy as hc
 import lightbeam as lb
@@ -6,8 +7,9 @@ from tqdm import trange
 from .utils import PROJECT_ROOT, date_now, is_list_or_dim1_array
 
 class LanternOptics:
-	def __init__(self, opt=None, f_number=None):
+	def __init__(self, opt=None, f_number=None, dm_basis="modal"):
 		self.nports = 19 # update this later
+		self.nmodes = 9 # update this later as well
 		if opt is None:
 			mesh_extent, mesh_spacing = 512, 1
 			self.telescope_diameter = 1
@@ -56,6 +58,7 @@ class LanternOptics:
 			self.aperture = opt.aperture
    
 		self.load_outputs()
+		self.make_command_matrix(opt, dm_basis)
    
 	def setup_hcipy(self, f_number):
 		self.f_number = f_number
@@ -190,18 +193,35 @@ class LanternOptics:
 	def lantern_reading(self, zernike, amplitude):
 		coeffs = self.lantern_coeffs(self.zernike_to_focal(zernike, amplitude))
 		return np.abs(coeffs) ** 2
-	
-	def make_command_matrix(self, nzern=19):
-		poke_amplitude = 1e-10
-		pokes = []
-		for i in trange(1, nzern+1):
-			amp_plus = self.lantern_reading(i, poke_amplitude)
-			amp_minus = self.lantern_reading(i, -poke_amplitude)
-			pokes.append((amp_plus - amp_minus) / (2 * poke_amplitude))
+  
+	def make_command_matrix(self, opt, dm_basis, rerun=True):
+		cmd_path = PROJECT_ROOT + f"/data/secondstage_lantern/cm_{date_now()}_{dm_basis}.npy"
+		if (not rerun) and os.path.exists(cmd_path):
+			self.command_matrix = np.load(cmd_path)
+		else:
+			probe_amp = 0.01 * self.wl
+			slopes = []
+   
+			ref_focal_wf = opt.focal_propagator(opt.wf)
+			self.image_ref = np.abs(self.lantern_coeffs(ref_focal_wf)) ** 2
 
-		interaction_matrix = np.array(pokes).T
-		self.command_matrix = np.linalg.pinv(interaction_matrix, rcond=1e-5)
-		self.flat_amp = self.lantern_reading(1, 0.0)
+			for ind in trange(self.nmodes):
+				slope = 0
+
+				# Probe the phase response
+				for s in [1, -1]:
+					amp = np.zeros((opt.deformable_mirror.num_actuators,))
+					amp[ind] = s * probe_amp
+					opt.deformable_mirror.actuators = amp
+					focal_wf = opt.focal_propagator(opt.deformable_mirror.forward(opt.wf))
+					image = np.abs(self.lantern_coeffs(focal_wf)) ** 2
+					slope += s * (image-self.image_ref)/(2 * probe_amp)
+
+				slopes.append(slope)
+
+			slopes = hc.ModeBasis(slopes)
+			self.command_matrix = hc.inverse_tikhonov(slopes.transformation_matrix, rcond=1e-3, svd=None)
+			np.save(PROJECT_ROOT + f"/data/secondstage_lantern/cm_{date_now()}_{dm_basis}.npy", self.command_matrix)
 		
 	def make_linearity(self, nzern=6, lim=0.1, step=None):
 		if step is None:
@@ -210,7 +230,7 @@ class LanternOptics:
 		linearity_responses = np.zeros((nzern, len(amplitudes), nzern))
 		for z in trange(1, nzern+1):
 			for (j,a) in enumerate(amplitudes):
-				flattened = self.lantern_reading(z,a) - self.flat_amp
+				flattened = self.lantern_reading(z,a) - self.image_ref
 				response = self.command_matrix @ flattened
 				linearity_responses[z-1,j,:nzern] = response
 		

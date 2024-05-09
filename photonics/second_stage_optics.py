@@ -6,12 +6,13 @@ from matplotlib import pyplot as plt
 from .utils import rms
 from .pyramid_optics import PyramidOptics
 from .lantern_optics import LanternOptics
-from .wfs_filter import WFSFilter
+from .wfs_filter import HighPassFilter, LowPassFilter
 
 class SecondStageOptics:
-	def __init__(self, lantern_fnumber=6.5, n_filter=9, f_cutoff=30, f_loop=100, dm_basis="zonal"):
+	def __init__(self, lantern_fnumber=6.5, n_filter=9, f_cutoff=30, f_loop=100, dm_basis="zonal", ncpa_z=4, ncpa_a=0.0):
 		a = np.exp(-2 * np.pi * f_cutoff / f_loop)
-		self.wfs_filter = WFSFilter(n_filter, a)
+		self.pyramid_filter = HighPassFilter(n_filter, a)
+		self.lantern_filter = LowPassFilter(n_filter, a)
 		self.f_loop = f_loop
 		self.dt = 1 / f_loop
 		self.optics_setup(lantern_fnumber)
@@ -19,6 +20,8 @@ class SecondStageOptics:
 		self.dm_setup(dm_basis)
 		self.pyramid_optics = PyramidOptics(self, dm_basis)
 		self.lantern_optics = LanternOptics(self)
+		self.ncpa_z, self.ncpa_a = ncpa_z, ncpa_a
+		self.ncpa = self.zernike_to_pupil(ncpa_z, ncpa_a)
 		
 	def optics_setup(self, lantern_fnumber=6.5):
 		self.lantern_fnumber = lantern_fnumber
@@ -91,37 +94,51 @@ class SecondStageOptics:
 		wf_after_atmos = self.layer.forward(wf_in)
 		return self.deformable_mirror.forward(wf_after_atmos)
 
-	def pyramid_correction(self, num_iterations=200, gain = 0.1, leakage = 0.999, plot=False, do_filter=False):
+	def correction(self, num_iterations=200, gain=0.1, leakage=0.999, plot=False, two_stage=False):
 		"""
-  		Soon this will be the general CL test and we'll be able to turn on one WFS or the other
+		Simulates a full AO loop.
     	"""
 		correction_results = {
-			"wavefront_after_dm_errors" : [],
 			"wavefronts_after_dm" : [],
 			"pyramid_readings" : [],
 			"dm_shapes" : [],
 			"point_spread_functions" : [],
 			"strehl_ratios" : [],
-			"phases_for" : []
+			"lantern_zernikes" : []
 		}
 		self.layer.reset()
 		self.layer.t = 0
 		for timestep in trange(num_iterations):
 			wf_after_dm = self.wavefront_after_dm(timestep * self.dt)
 			pyramid_reading = self.pyramid_optics.reconstruct(wf_after_dm)
-			if do_filter:
-				hpf_reading, lpf_reading = self.wfs_filter(pyramid_reading[:self.wfs_filter.n])
-				pyramid_reading[:self.wfs_filter.n] = hpf_reading
-			self.deformable_mirror.actuators = leakage * self.deformable_mirror.actuators - gain * pyramid_reading
-			wf_focal = self.focal_propagator.forward(wf_after_dm)
-			correction_results["wavefront_after_dm_errors"].append(float(rms(wf_after_dm.phase * self.aperture)))
+			dm_command = np.copy(pyramid_reading)
+			if two_stage:
+				hpf_reading = self.pyramid_filter(pyramid_reading[:self.pyramid_filter.n])
+				dm_command[:self.pyramid_filter.n] = hpf_reading
+			if self.ncpa_a != 0:
+				wf_focal = self.focal_propagator.forward(
+					hc.Wavefront(
+						wf_after_dm.electric_field * self.ncpa.electric_field,
+						wavelength = self.wl
+					)
+				)
+			else:
+				wf_focal = self.focal_propagator.forward(wf_after_dm)
+
+			if two_stage:
+				lantern_reading = np.abs(self.lantern_optics.lantern_coeffs(wf_focal)) ** 2
+				lantern_zernikes = self.lantern_optics.command_matrix @ lantern_reading
+				lpf_reading = self.lantern_filter(lantern_zernikes)
+				correction_results["lantern_zernikes"].append(lantern_zernikes)
+				dm_command[:self.lantern_filter.n] += lpf_reading
+
+			self.deformable_mirror.actuators = leakage * self.deformable_mirror.actuators - gain * dm_command
 			correction_results["wavefronts_after_dm"].append(wf_after_dm.copy())
 			correction_results["pyramid_readings"].append(pyramid_reading)
 			correction_results["dm_shapes"].append(copy(self.deformable_mirror.surface))
 			correction_results["point_spread_functions"].append(wf_focal.copy())
 			strehl_foc = hc.get_strehl_from_focal(wf_focal.intensity/self.norm,self.im_ref.intensity/self.norm)
 			correction_results["strehl_ratios"].append(float(strehl_foc))
-			correction_results["phases_for"].append(self.layer.phase_for(self.wl))
 		
 		#plot the results
 		if plot:

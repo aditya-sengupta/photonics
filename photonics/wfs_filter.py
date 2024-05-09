@@ -1,21 +1,29 @@
 import numpy as np
 
 class WFSFilter:
-    """
-    Class to handle the HPF/LPF wavefront sensor output filtering.
-    """
     def __init__(self, n, a):
         self.n = n
         self.a = a
         self.reset()
         
-    def __call__(self, inp):
-        hpf = inp - (self.a * self.last_hpf + (1 - self.a) * self.last_inp)
-        lpf = self.a * self.last_lpf + (1 - self.a) * self.last_inp
-        self.last_hpf, self.last_lpf, self.last_inp = hpf, lpf, inp
-        return hpf, lpf
-        
     def reset(self):
-        self.last_hpf = np.zeros(self.n)
-        self.last_lpf = np.zeros(self.n)
-        self.last_inp = np.zeros(self.n)
+        self.last_out = np.zeros(self.n)
+        self.last_in = np.zeros(self.n)
+
+class HighPassFilter(WFSFilter):
+    """
+    Class to handle the high-pass filter after the first-stage WFS.
+    """
+    def __call__(self, inp):
+        out = self.a * self.last_out + self.a * (inp - self.last_in)
+        self.last_in, self.last_out = np.copy(inp), np.copy(out)
+        return out
+
+class LowPassFilter(WFSFilter):
+    """
+    Class to handle the low-pass filter after the second-stage WFS.
+    """
+    def __call__(self, inp):
+        out = (1 - self.a) * inp + self.a * self.last_out
+        self.last_out = np.copy(out)
+        return out
