@@ -1,7 +1,8 @@
 import numpy as np
 import hcipy as hc
+import sys
 from copy import copy
-from tqdm import trange
+from tqdm import tqdm, trange
 from matplotlib import pyplot as plt
 from .utils import rms
 from .pyramid_optics import PyramidOptics
@@ -20,8 +21,9 @@ class SecondStageOptics:
 		self.dm_setup(dm_basis)
 		self.pyramid_optics = PyramidOptics(self, dm_basis)
 		self.lantern_optics = LanternOptics(self)
+		self.zernike_basis = hc.mode_basis.make_zernike_basis(n_filter, self.telescope_diameter, self.pupil_grid, starting_mode=2)
 		self.ncpa_z, self.ncpa_a = ncpa_z, ncpa_a
-		self.ncpa = self.zernike_to_pupil(ncpa_z, ncpa_a)
+		self.ncpa = hc.Wavefront(np.exp(1j * self.zernike_basis[ncpa_z] * ncpa_a) * self.aperture, wavelength=self.wl)
 		
 	def optics_setup(self, lantern_fnumber=6.5):
 		self.lantern_fnumber = lantern_fnumber
@@ -51,9 +53,7 @@ class SecondStageOptics:
 		Cn_squared = hc.Cn_squared_from_fried_parameter(fried_parameter)
 		self.layer = hc.InfiniteAtmosphericLayer(self.pupil_grid, Cn_squared, outer_scale, velocity, seed=seed)
 		
-	def dm_setup(self, dm_basis):
-		#make the DM
-		num_actuators = 9
+	def dm_setup(self, dm_basis, num_actuators=9):
 		if dm_basis == "zonal":
 			actuator_spacing = self.telescope_diameter / num_actuators
 			influence_functions = hc.make_gaussian_influence_functions(self.pupil_grid, num_actuators, actuator_spacing)
@@ -80,9 +80,6 @@ class SecondStageOptics:
 	def zernike_to_pupil(self, zernike, amplitude):
 		return self.phase_to_pupil(self.zernike_to_phase(zernike, amplitude))
 			
-	def zernike_to_focal(self, zernike, amplitude):
-		return self.prop(self.phase_to_pupil(self.zernike_to_phase(zernike, amplitude)))
-
 	def wavefront_after_dm(self, t):
 		"""
 		Generates the wavefront after the DM at a time "t".
@@ -94,7 +91,7 @@ class SecondStageOptics:
 		wf_after_atmos = self.layer.forward(wf_in)
 		return self.deformable_mirror.forward(wf_after_atmos)
 
-	def correction(self, num_iterations=200, gain=0.1, leakage=0.999, plot=False, two_stage=False):
+	def correction(self, num_iterations=200, gain=0.1, leakage=0.999, plot=False, two_stage_niter=100):
 		"""
 		Simulates a full AO loop.
     	"""
@@ -104,64 +101,49 @@ class SecondStageOptics:
 			"dm_shapes" : [],
 			"point_spread_functions" : [],
 			"strehl_ratios" : [],
-			"lantern_zernikes" : []
+			"lantern_readings" : [],
+   			"lantern_zernikes_truth" : [],
+			"lantern_zernikes_measured" : []
 		}
 		self.layer.reset()
 		self.layer.t = 0
-		for timestep in trange(num_iterations):
-			wf_after_dm = self.wavefront_after_dm(timestep * self.dt)
-			pyramid_reading = self.pyramid_optics.reconstruct(wf_after_dm)
-			dm_command = np.copy(pyramid_reading)
-			if two_stage:
-				hpf_reading = self.pyramid_filter(pyramid_reading[:self.pyramid_filter.n])
-				dm_command[:self.pyramid_filter.n] = hpf_reading
-			if self.ncpa_a != 0:
-				wf_focal = self.focal_propagator.forward(
-					hc.Wavefront(
-						wf_after_dm.electric_field * self.ncpa.electric_field,
-						wavelength = self.wl
+		with tqdm(range(num_iterations), file=sys.stdout) as progress:
+			for timestep in progress:
+				wf_after_dm = self.wavefront_after_dm(timestep * self.dt)
+				pyramid_reading = self.pyramid_optics.reconstruct(wf_after_dm)
+				dm_command = np.copy(pyramid_reading)
+				if timestep > two_stage_niter:
+					hpf_reading = self.pyramid_filter(pyramid_reading[:self.pyramid_filter.n])
+					dm_command[:self.pyramid_filter.n] = hpf_reading
+				if self.ncpa_a != 0:
+					wf_focal = self.focal_propagator.forward(
+						hc.Wavefront(
+							wf_after_dm.electric_field * self.ncpa.electric_field,
+							wavelength = self.wl
+						)
 					)
-				)
-			else:
-				wf_focal = self.focal_propagator.forward(wf_after_dm)
+				else:
+					wf_focal = self.focal_propagator.forward(wf_after_dm)
 
-			if two_stage:
-				lantern_reading = np.abs(self.lantern_optics.lantern_coeffs(wf_focal)) ** 2
-				lantern_zernikes = self.lantern_optics.command_matrix @ lantern_reading
-				lpf_reading = self.lantern_filter(lantern_zernikes)
-				correction_results["lantern_zernikes"].append(lantern_zernikes)
-				dm_command[:self.lantern_filter.n] += lpf_reading
+				if timestep == two_stage_niter:
+					tqdm.write(f"Closing second-stage loop at iteration {timestep}")
+				if timestep > two_stage_niter:
+					lantern_zernikes_truth = self.zernike_basis.coefficients_for(wf_after_dm.phase)
+					lantern_zernikes_truth[self.ncpa_z] += self.ncpa_a
+					correction_results["lantern_zernikes_truth"].append(lantern_zernikes_truth)
+					lantern_reading = np.abs(self.lantern_optics.lantern_coeffs(wf_focal)) ** 2
+					lantern_zernikes_measured = self.lantern_optics.command_matrix @ lantern_reading
+					lpf_reading = self.lantern_filter(lantern_zernikes_measured)
+					correction_results["lantern_zernikes_measured"].append(lantern_zernikes_measured)
+					dm_command[:self.lantern_filter.n] += lpf_reading
 
-			self.deformable_mirror.actuators = leakage * self.deformable_mirror.actuators - gain * dm_command
-			correction_results["wavefronts_after_dm"].append(wf_after_dm.copy())
-			correction_results["pyramid_readings"].append(pyramid_reading)
-			correction_results["dm_shapes"].append(copy(self.deformable_mirror.surface))
-			correction_results["point_spread_functions"].append(wf_focal.copy())
-			strehl_foc = hc.get_strehl_from_focal(wf_focal.intensity/self.norm,self.im_ref.intensity/self.norm)
-			correction_results["strehl_ratios"].append(float(strehl_foc))
-		
-		#plot the results
-		if plot:
-			fig = plt.figure(figsize=(15,8))
-
-			plt.subplot(1,3,1)
-			plt.title(r'DM surface shape ($\mathrm{\mu}$m)')
-			hc.imshow_field(self.aperture*self.deformable_mirror.surface/(1e-6), vmin=-1, vmax=1, cmap='bwr')
-			plt.colorbar(fraction=0.046, pad=0.04)
-
-			plt.subplot(1,3,2)
-			plt.title('Residual wavefront error (rad)')
-			res = wf_after_dm.phase*self.aperture
-			hc.imshow_field(res, cmap='RdBu')
-			plt.colorbar(fraction=0.046, pad=0.04)
-
-			plt.subplot(1,3,3)
-			plt.title('Focal Plane Image (Strehl = %.2f)'% (np.mean(np.asarray(correction_results["strehl_ratios"]))))
-			hc.imshow_field(np.log10(wf_focal.intensity/self.norm), cmap='inferno')
-			plt.colorbar(fraction=0.046, pad=0.04)
-			plt.tight_layout()
-			plt.show()
-		return correction_results # {k : np.array(correction_results[k]) for k in correction_results}
-
-
-	
+				self.deformable_mirror.actuators = leakage * self.deformable_mirror.actuators - gain * dm_command
+				correction_results["wavefronts_after_dm"].append(wf_after_dm.copy())
+				correction_results["pyramid_readings"].append(pyramid_reading)
+				correction_results["dm_shapes"].append(copy(self.deformable_mirror.surface))
+				correction_results["point_spread_functions"].append(wf_focal.copy())
+				strehl_foc = hc.get_strehl_from_focal(wf_focal.intensity/self.norm,self.im_ref.intensity/self.norm)
+				correction_results["strehl_ratios"].append(float(strehl_foc))
+				progress.set_postfix(strehl=f"{float(strehl_foc):.3f}")
+  
+		return correction_results

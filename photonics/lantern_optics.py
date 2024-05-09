@@ -194,7 +194,7 @@ class LanternOptics:
 		coeffs = self.lantern_coeffs(self.zernike_to_focal(zernike, amplitude))
 		return np.abs(coeffs) ** 2
   
-	def make_command_matrix(self, opt, dm_basis, rerun=True):
+	def make_command_matrix(self, opt, dm_basis, rerun=False):
 		cmd_path = PROJECT_ROOT + f"/data/secondstage_lantern/cm_{date_now()}_{dm_basis}.npy"
 		if (not rerun) and os.path.exists(cmd_path):
 			self.command_matrix = np.load(cmd_path)
