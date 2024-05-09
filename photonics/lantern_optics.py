@@ -219,6 +219,7 @@ class LanternOptics:
 
 				slopes.append(slope)
 
+			opt.deformable_mirror.flatten()
 			slopes = hc.ModeBasis(slopes)
 			self.command_matrix = hc.inverse_tikhonov(slopes.transformation_matrix, rcond=1e-3, svd=None)
 			np.save(PROJECT_ROOT + f"/data/secondstage_lantern/cm_{date_now()}_{dm_basis}.npy", self.command_matrix)
