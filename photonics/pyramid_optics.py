@@ -46,7 +46,7 @@ class PyramidOptics:
             num_modes = opt.deformable_mirror.num_actuators
             slopes = []
 
-            for ind in trange(num_modes):
+            for ind in range(num_modes):
                 slope = 0
 
                 # Probe the phase response

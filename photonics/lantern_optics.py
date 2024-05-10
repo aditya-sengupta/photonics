@@ -212,7 +212,7 @@ class LanternOptics:
 			num_modes = self.nmodes
 			slopes = []
 
-			for ind in trange(num_modes):
+			for ind in range(num_modes):
 				slope = 0
 
 				# Probe the phase response
@@ -226,6 +226,7 @@ class LanternOptics:
 
 				slopes.append(slope)
 
+			dm.flatten()
 			slopes = hc.ModeBasis(slopes)
 			self.command_matrix = hc.inverse_tikhonov(slopes.transformation_matrix, rcond=1e-3, svd=None)
 			np.save(PROJECT_ROOT + f"/data/secondstage_lantern/cm_{date_now()}_{opt.dm_basis}.npy", self.command_matrix)
@@ -376,9 +377,9 @@ class LanternOptics:
 				lantern_zernikes_truth = self.zernike_basis.coefficients_for(wf_after_dm.phase)
 				correction_results["lantern_zernikes_truth"].append(lantern_zernikes_truth)
 				lantern_reading = self.readout(wf_after_dm)
-				lantern_zernikes_measured = self.command_matrix @ lantern_reading
+				lantern_zernikes_measured = self.command_matrix @ (lantern_reading - self.image_ref)
 				correction_results["lantern_zernikes_measured"].append(lantern_zernikes_measured)
-				dm_command[:self.nmodes] = lantern_zernikes_measured
+				dm_command[:self.nmodes] = lantern_zernikes_measured / (self.wl / (2 * np.pi))
 				correction_results["dm_commands"] = dm_command
 				deformable_mirror.actuators = leakage * deformable_mirror.actuators - gain * dm_command
 				correction_results["wavefronts_after_dm"].append(wf_after_dm.copy())
