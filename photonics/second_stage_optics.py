@@ -19,9 +19,10 @@ class SecondStageOptics:
 		self.optics_setup(lantern_fnumber)
 		self.turbulence_setup()
 		self.dm_setup(dm_basis)
-		self.pyramid_optics = PyramidOptics(self, dm_basis)
-		self.lantern_optics = LanternOptics(self)
+		self.dm_basis = dm_basis
 		self.zernike_basis = hc.mode_basis.make_zernike_basis(n_filter, self.telescope_diameter, self.pupil_grid, starting_mode=2)
+		self.pyramid_optics = PyramidOptics(self, dm_basis)
+		self.lantern_optics = LanternOptics(self, lantern_fnumber)
 		self.ncpa_z, self.ncpa_a = ncpa_z, ncpa_a
 		self.ncpa = hc.Wavefront(np.exp(1j * self.zernike_basis[ncpa_z] * ncpa_a) * self.aperture, wavelength=self.wl)
 		
@@ -96,12 +97,13 @@ class SecondStageOptics:
 		Simulates a full AO loop.
     	"""
 		correction_results = {
+			"phases_for" : [],
 			"wavefronts_after_dm" : [],
 			"pyramid_readings" : [],
+			"dm_commands" : [],
 			"dm_shapes" : [],
 			"point_spread_functions" : [],
 			"strehl_ratios" : [],
-			"lantern_readings" : [],
    			"lantern_zernikes_truth" : [],
 			"lantern_zernikes_measured" : []
 		}
@@ -110,6 +112,7 @@ class SecondStageOptics:
 		with tqdm(range(num_iterations), file=sys.stdout) as progress:
 			for timestep in progress:
 				wf_after_dm = self.wavefront_after_dm(timestep * self.dt)
+				correction_results["phases_for"].append(self.layer.phase_for(self.wl))
 				pyramid_reading = self.pyramid_optics.reconstruct(wf_after_dm)
 				dm_command = np.copy(pyramid_reading)
 				if timestep > two_stage_niter:
@@ -137,6 +140,7 @@ class SecondStageOptics:
 					correction_results["lantern_zernikes_measured"].append(lantern_zernikes_measured)
 					dm_command[:self.lantern_filter.n] += lpf_reading
 
+				correction_results["dm_commands"].append(copy(dm_command))
 				self.deformable_mirror.actuators = leakage * self.deformable_mirror.actuators - gain * dm_command
 				correction_results["wavefronts_after_dm"].append(wf_after_dm.copy())
 				correction_results["pyramid_readings"].append(pyramid_reading)

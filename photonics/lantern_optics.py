@@ -1,9 +1,11 @@
 import os
+import sys
 import numpy as np
 import hcipy as hc
 import lightbeam as lb
+from copy import copy
 from matplotlib import pyplot as plt
-from tqdm import trange
+from tqdm import tqdm, trange
 from .utils import PROJECT_ROOT, date_now, is_list_or_dim1_array
 
 class LanternOptics:
@@ -56,9 +58,14 @@ class LanternOptics:
 			self.focal_grid = opt.focal_grid
 			self.prop = opt.focal_propagator
 			self.aperture = opt.aperture
+			self.f_number = f_number
+			self.zernike_basis = opt.zernike_basis
+			self.norm = opt.norm
    
+		self.pupil_wf_ref = self.zernike_to_pupil(4, 0.0)
+		self.focal_wf_ref = self.prop(self.pupil_wf_ref)
 		self.load_outputs()
-		self.make_command_matrix(opt, dm_basis)
+		self.make_command_matrix(opt, self.nmodes)
    
 	def setup_hcipy(self, f_number):
 		self.f_number = f_number
@@ -72,8 +79,6 @@ class LanternOptics:
 			num_airy *= (num_px + 1) / num_px
 		self.focal_grid = hc.make_focal_grid(q=q, num_airy=num_airy, spatial_resolution=spatial_resolution)
 		self.prop = hc.FraunhoferPropagator(self.pupil_grid, self.focal_grid, focal_length=(f_number * self.telescope_diameter))
-		self.pupil_wf_ref = self.zernike_to_pupil(4, 0.0)
-		self.focal_wf_ref = self.prop(self.pupil_wf_ref)
   
 	def zernike_to_phase(self, zernike, amplitude):
 		if is_list_or_dim1_array(zernike) and is_list_or_dim1_array(amplitude):
@@ -146,7 +151,6 @@ class LanternOptics:
 		
 		np.save(PROJECT_ROOT + f"/data/backprop_19_{date_now()}.npy", np.array(outputs))
 		np.save(PROJECT_ROOT + "/data/backprop_19.npy", np.array(outputs))
-		np.save(PROJECT_ROOT + "/data/backprop_19.npy", np.array(outputs))
 		
 	def load_outputs(self):
 		outputs = np.load(PROJECT_ROOT + "/data/backprop_19.npy")
@@ -193,36 +197,50 @@ class LanternOptics:
 	def lantern_reading(self, zernike, amplitude):
 		coeffs = self.lantern_coeffs(self.zernike_to_focal(zernike, amplitude))
 		return np.abs(coeffs) ** 2
-  
-	def make_command_matrix(self, opt, dm_basis, rerun=False):
-		cmd_path = PROJECT_ROOT + f"/data/secondstage_lantern/cm_{date_now()}_{dm_basis}.npy"
+
+	def readout(self, wf_after_dm):
+		return np.abs(self.lantern_coeffs(self.prop(wf_after_dm))) ** 2
+
+	def make_command_matrix(self, opt, rerun=False):
+		dm = opt.deformable_mirror
+		self.image_ref = self.readout(opt.wf)
+		cmd_path = PROJECT_ROOT + f"/data/secondstage_lantern/cm_{date_now()}_{opt.dm_basis}.npy"
 		if (not rerun) and os.path.exists(cmd_path):
 			self.command_matrix = np.load(cmd_path)
 		else:
 			probe_amp = 0.01 * self.wl
+			num_modes = self.nmodes
 			slopes = []
-   
-			ref_focal_wf = opt.focal_propagator(opt.wf)
-			self.image_ref = np.abs(self.lantern_coeffs(ref_focal_wf)) ** 2
 
-			for ind in trange(self.nmodes):
+			for ind in trange(num_modes):
 				slope = 0
 
 				# Probe the phase response
 				for s in [1, -1]:
-					amp = np.zeros((opt.deformable_mirror.num_actuators,))
+					amp = np.zeros((dm.num_actuators,))
 					amp[ind] = s * probe_amp
-					opt.deformable_mirror.actuators = amp
-					focal_wf = opt.focal_propagator(opt.deformable_mirror.forward(opt.wf))
-					image = np.abs(self.lantern_coeffs(focal_wf)) ** 2
+					dm.actuators = amp
+					dm_wf = dm.forward(opt.wf)
+					image = self.readout(dm_wf)
 					slope += s * (image-self.image_ref)/(2 * probe_amp)
 
 				slopes.append(slope)
 
-			opt.deformable_mirror.flatten()
 			slopes = hc.ModeBasis(slopes)
 			self.command_matrix = hc.inverse_tikhonov(slopes.transformation_matrix, rcond=1e-3, svd=None)
-			np.save(PROJECT_ROOT + f"/data/secondstage_lantern/cm_{date_now()}_{dm_basis}.npy", self.command_matrix)
+			np.save(PROJECT_ROOT + f"/data/secondstage_lantern/cm_{date_now()}_{opt.dm_basis}.npy", self.command_matrix)
+  
+	def make_command_matrix_z(self, nzern=19):
+		poke_amplitude = 1e-10
+		pokes = []
+		for i in range(1, nzern+1):
+			amp_plus = self.lantern_reading(i, poke_amplitude)
+			amp_minus = self.lantern_reading(i, -poke_amplitude)
+			pokes.append((amp_plus - amp_minus) / (2 * poke_amplitude))
+
+		interaction_matrix = np.array(pokes).T
+		self.command_matrix = np.linalg.pinv(interaction_matrix, rcond=1e-5)
+		self.image_ref = self.lantern_reading(1, 0.0)
 		
 	def make_linearity(self, nzern=6, lim=0.1, step=None):
 		if step is None:
@@ -330,3 +348,44 @@ class LanternOptics:
 		fig.delaxes(axs[-1][-1])
 		plt.savefig(PROJECT_ROOT + "/figures/lantern_modes_19.png", dpi=600, bbox_inches="tight")
 		plt.show()
+  
+	def correction(self, layer, deformable_mirror, num_iterations=200, dt=1/800, gain=0.1, leakage=0.999, plot=False):
+		"""
+		Simulates a full AO loop with just the lantern.
+		"""
+		correction_results = {
+			"wavefronts_after_dm" : [],
+			"dm_commands" : [],
+			"dm_shapes" : [],
+			"point_spread_functions" : [],
+			"strehl_ratios" : [],
+   			"lantern_zernikes_truth" : [],
+			"lantern_zernikes_measured" : []
+		}
+		layer.reset()
+		layer.t = 0
+		wf = hc.Wavefront(self.aperture, wavelength=self.wl)
+		dm_command = np.zeros(deformable_mirror.num_actuators)
+		with tqdm(range(num_iterations), file=sys.stdout) as progress:
+			for timestep in progress:
+				wf_in = wf.copy()
+				layer.t = timestep * dt
+				wf_after_atmos = layer.forward(wf_in)
+				wf_after_dm = deformable_mirror.forward(wf_after_atmos)
+				wf_focal = self.prop.forward(wf_after_dm)
+				lantern_zernikes_truth = self.zernike_basis.coefficients_for(wf_after_dm.phase)
+				correction_results["lantern_zernikes_truth"].append(lantern_zernikes_truth)
+				lantern_reading = self.readout(wf_after_dm)
+				lantern_zernikes_measured = self.command_matrix @ lantern_reading
+				correction_results["lantern_zernikes_measured"].append(lantern_zernikes_measured)
+				dm_command[:self.nmodes] = lantern_zernikes_measured
+				correction_results["dm_commands"] = dm_command
+				deformable_mirror.actuators = leakage * deformable_mirror.actuators - gain * dm_command
+				correction_results["wavefronts_after_dm"].append(wf_after_dm.copy())
+				correction_results["dm_shapes"].append(copy(deformable_mirror.surface))
+				correction_results["point_spread_functions"].append(wf_focal.copy())
+				strehl_foc = hc.get_strehl_from_focal(wf_focal.intensity/self.norm,self.focal_wf_ref.intensity/self.norm)
+				correction_results["strehl_ratios"].append(float(strehl_foc))
+				progress.set_postfix(strehl=f"{float(strehl_foc):.3f}")
+  
+		return correction_results
