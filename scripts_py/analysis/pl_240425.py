@@ -41,7 +41,17 @@ img_files = list(map(lambda x: x.replace("dmc_240425", "pl_240425"), dmc_files))
 # 21: sweep over all modes, (0.24, 0.52, 0.02)
 
 # I also have on-sky interaction matrices that I can correlate later.
+# %%
+dmcs = np.load(path.join(directory_240425, dmc_files[7]))
+imgs = np.load(path.join(directory_240425, img_files[7]))
+throughput = np.sum(np.maximum(imgs, 0), axis=(1,2))
+# %%
+dmcs_in_rad = dmcs * 40 * (2 * np.pi / 1.55)
+dmcs_rms = np.sqrt(np.sum(dmcs_in_rad ** 2, axis=1))
 
+# %%
+perm = np.argsort(dmcs_rms)
+plt.scatter(dmcs_rms[perm], throughput[perm])
 # %%
 # first, let's answer: can we get a linear range with just these sweeps?
 # This array is (zernike number, amplitude index, port number)

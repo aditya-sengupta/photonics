@@ -1,0 +1,66 @@
+\documentclass{article}
+\usepackage{custom}
+\usepackage[margin=1in]{geometry}
+
+\title{An empirical photonic lantern identification process}
+\author{Aditya Sengupta}
+
+\begin{document}
+    \maketitle
+
+    \section{Problem setup}
+    We are interested in finding a procedure that will allow us to exactly predict the action of a photonic lantern, without any information about it other than its responses to known wavefronts.
+
+    Let $\Phi$ be the space of all possible phase screens. Let $X$ be the space of all possible electric fields and let $F: \Phi \to X, F(\phi) = \text{FraunhoferProp}(A e^{i \phi})$ define the mapping from phase screens to electric fields. Since we are not able to introduce intensity differences, we have $X_p = \set{F(\phi) \mid \phi \in \Phi} \subset X$ where $A$ is the telescope aperture. This tells us that $F$ is injective but not surjective.
+
+    Let $P: X \to \C^N$ be a map defining the action of a photonic lantern with $N$ ports, from the multi-mode to the single-mode end. We can only observe the intensities of the single-mode end. A \textit{lantern identification procedure} is an algorithm that allows us to predict $P(F(\phi))$ for all $\phi \in \Phi$, given a finite set of input-output pairs $\set{\phi_i, \abs{P(F(\phi_i))}^2}$ where the $\abs{\cdot}^2$ is taken elementwise.
+
+    $P$ is a linear map, so we would like to identify it by finding its matrix representation. This requires us to pick a basis for $X$, which in general is infinite-dimensional. However, we know that only an $N$-dimensional complex subspace of $X$ should result in nonzero PL outputs (the guided modes) and all others should result in zero (either the radiating modes or those that lie entirely outside the lantern input.) Therefore we define a restricted linear map $P_M = \left.P\right|_{\text{guided modes}}$. Let $X_g = \set{x \in X \mid P(x) \neq 0}$ and let $P_M: X_g \to \C^N$, $P_M(x) = P(x)$. $P_M$ admits a matrix representation in $\C^{N \times N}$ given a choice of basis for $X_g$.
+
+    We'll take as a given that $\dim(X_g) = N$. I'm not sure if this would be provable if I incorporated more detailed information about photonics, but it seems reasonable. Also, we'll work over $\C$ throughout this.
+
+    Now, we can show that $P_M$ is full-rank as follows. Since $P(x) \neq 0 \ \forall x \in X_g$ by definition of $X_g$, we know that $\dim \ker P_M = 0$. By the rank-nullity theorem, we have $\dim \Im P_M + \dim \ker P_M = N$, which gives us $\dim \Im P_M = N$.
+
+    This means photonic lantern outputs (in electric field) have unique inverses that lie within $\mathrm{span}(X_g)$. 
+
+    \section{Identification procedure}
+
+    Since the ports are all independent, we outline the identification procedure for one port, and then do this for each port/as a vector operation over all ports. Therefore, this will be an identification procedure for one row of $P_M$.
+
+    Parameterize the elements of this row by
+
+    \begin{align*}
+        P_{M,1} = \mat{A_1 & A_2 e^{i\varphi_{2}} & A_3 e^{i\varphi_{3}} & \dots & A_N e^{i\varphi_{N}}}
+    \end{align*}
+
+    where without loss of generality we let the phase of the first element be 0, since we can't sense overall phase offsets. We are interested in finding the $A_i$s and $\varphi_{i}$s.
+
+    \begin{enumerate}
+        \item Choose a basis of $X_g$, denoted $\set{x_i}_{i=1}^N$. Future work may address how to choose this basis for maximal effectiveness of phase retrieval algorithms; for our purposes it is sufficient to choose any $\set{\phi_i}_{i=1}^N \subset \Phi$ such that their image under $F$ results in a linearly independent set. I think this should happen for ``almost all'' choices of $\set{\phi_i}$ but I'm not certain.
+        \item Find all the $A_i$s by taking $\sqrt{|P(F(\phi_i))|^2}$.
+        \item Choose some phase screen $\phi_j$ and find its guided modes by projecting $F(\phi_j)$ onto $X_g$. Let the decomposition in $X_g$ be given by $x_j = \sum_i c_i x_i$. 
+        \item Find $\abs{P(x_j)}^2$. This is given by
+        
+        \begin{align*}
+            \abs{P(x_j)}^2 = \abs{\sum_{i=1}^N c_i P(x_i)}^2 = \sum_{i=1}^N \sum_{k=1}^N c_i c_k \abs{P(x_i)} \abs{P(x_k)} \cos(\varphi_k - \varphi_i).
+        \end{align*}
+
+        We can subtract off the terms where $i = k$. This gives us a linear constraint on the system of cosines of phase offsets. 
+
+        \item Repeat for a total of $(N-1)(N-2)$ iterations and solve the resulting linear system in $\cos(\varphi_k - \varphi_l)$ to find $\set{\varphi_i}_{i=1}^N$. 
+    \end{enumerate}
+
+    There are $N-1$ unique phase differences and there is a sign degeneracy for each as we're only observing cosines. Since we don't have full control over the coefficients $c_i$, we can't necessarily zero out components and find the general solution in fewer iterations; if we had this (e.g. could guarantee that we could send $x_1 + x_2$) we would need $2N-2$ queries. We could also reduce the number if we extended this to a quadratic system, but it's not entirely clear how to ensure this would be solvable.
+
+    The linear system we solve contains all the necessary information to resolve sign degeneracies, because we know that, e.g.
+
+    \begin{align*}
+        \cos(\varphi_k - \varphi_l) &= \cos([\varphi_k - \varphi_m] - [\varphi_m - \varphi_l])\\
+        &= \cos(\varphi_k - \varphi_m) \cos(\varphi_m - \varphi_l) - \sin(\varphi_k - \varphi_m) \sin(\varphi_m - \varphi_l).
+    \end{align*}
+
+    We know all three cosine terms, and we know both sine terms up to a sign, so depending on whether the equation is satisfied by flipping the sign or not, we know the relative sign of $\varphi_k - \varphi_m$ and $\varphi_m - \varphi_l$.
+
+    I think you could make this more robust to noise by increasing the number of samples taken and getting a least-squares solution to the resulting overdetermined system, but I think this is already quite overdetermined (since we're not using the cosine-sum formula when solving the linear system, we get many more measurements than there are free variables.)
+
+\end{document}
