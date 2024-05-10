@@ -1,17 +1,30 @@
 import numpy as np
 import hcipy as hc
-from tqdm import trange
+import sys
+from copy import copy
+from tqdm import tqdm, trange
 from matplotlib import pyplot as plt
+from .utils import rms
 from .pyramid_optics import PyramidOptics
 from .lantern_optics import LanternOptics
+from .wfs_filter import HighPassFilter, LowPassFilter
 
 class SecondStageOptics:
-	def __init__(self, lantern_fnumber=6.5):
+	def __init__(self, lantern_fnumber=6.5, n_filter=9, f_cutoff=30, f_loop=100, dm_basis="zonal", ncpa_z=4, ncpa_a=0.0):
+		a = np.exp(-2 * np.pi * f_cutoff / f_loop)
+		self.pyramid_filter = HighPassFilter(n_filter, a)
+		self.lantern_filter = LowPassFilter(n_filter, a)
+		self.f_loop = f_loop
+		self.dt = 1 / f_loop
 		self.optics_setup(lantern_fnumber)
 		self.turbulence_setup()
-		self.dm_setup()
-		self.pyramid_optics = PyramidOptics(self)
-		self.lantern_optics = LanternOptics(self)
+		self.dm_setup(dm_basis)
+		self.dm_basis = dm_basis
+		self.zernike_basis = hc.mode_basis.make_zernike_basis(n_filter, self.telescope_diameter, self.pupil_grid, starting_mode=2)
+		self.pyramid_optics = PyramidOptics(self, dm_basis)
+		self.lantern_optics = LanternOptics(self, lantern_fnumber)
+		self.ncpa_z, self.ncpa_a = ncpa_z, ncpa_a
+		self.ncpa = hc.Wavefront(np.exp(1j * self.zernike_basis[ncpa_z] * ncpa_a) * self.aperture, wavelength=self.wl)
 		
 	def optics_setup(self, lantern_fnumber=6.5):
 		self.lantern_fnumber = lantern_fnumber
@@ -37,22 +50,21 @@ class SecondStageOptics:
 		self.im_ref = self.focal_propagator.forward(self.wf)
 		self.norm = np.max(self.im_ref.intensity)
 		
-	def turbulence_setup(self):
-		fried_parameter = 0.13 # meters
-		outer_scale = 50 #  meters
-		velocity = 10. # wind speed in m/s.
-		Cn_squared = hc.Cn_squared_from_fried_parameter(fried_parameter)  #convert the fried parameter into Cn2
-
-		# make our atmospheric turbulence layer
-		self.layer = hc.InfiniteAtmosphericLayer(self.pupil_grid, Cn_squared, outer_scale, velocity)
+	def turbulence_setup(self, fried_parameter=0.5, outer_scale=50, velocity=10.0, seed=1):
+		Cn_squared = hc.Cn_squared_from_fried_parameter(fried_parameter)
+		self.layer = hc.InfiniteAtmosphericLayer(self.pupil_grid, Cn_squared, outer_scale, velocity, seed=seed)
 		
-	def dm_setup(self):
-		#make the DM
-		num_actuators = 9
-		actuator_spacing = self.telescope_diameter / num_actuators
-		influence_functions = hc.make_gaussian_influence_functions(self.pupil_grid, num_actuators, actuator_spacing)
-		self.deformable_mirror = hc.DeformableMirror(influence_functions)
-	
+	def dm_setup(self, dm_basis, num_actuators=9):
+		if dm_basis == "zonal":
+			actuator_spacing = self.telescope_diameter / num_actuators
+			influence_functions = hc.make_gaussian_influence_functions(self.pupil_grid, num_actuators, actuator_spacing)
+			self.deformable_mirror = hc.DeformableMirror(influence_functions)
+		elif dm_basis == "modal":
+			modes = hc.make_zernike_basis(num_actuators ** 2, self.telescope_diameter, self.pupil_grid, starting_mode=2)
+			self.deformable_mirror = hc.DeformableMirror(modes)
+		else:
+			raise NameError("DM basis needs to be zonal or modal")
+ 
 	# awful design. Need a refactor so these don't also live in lanternoptics, after I've got GS working.
 	def zernike_to_phase(self, zernike, amplitude):
 		if isinstance(zernike, list) and isinstance(amplitude, list):
@@ -69,66 +81,73 @@ class SecondStageOptics:
 	def zernike_to_pupil(self, zernike, amplitude):
 		return self.phase_to_pupil(self.zernike_to_phase(zernike, amplitude))
 			
-	def zernike_to_focal(self, zernike, amplitude):
-		return self.prop(self.phase_to_pupil(self.zernike_to_phase(zernike, amplitude)))
-
-	def pyramid_correction(self, num_iterations=10, dt=1./800, gain = 0.6, leakage = 0.999):
+	def wavefront_after_dm(self, t):
 		"""
-  		Soon this will be the general CL test and we'll be able to turn on one WFS or the other
+		Generates the wavefront after the DM at a time "t".
+		This uses the current shape of self.deformable_mirror
+		so just repeatedly calling it in open loop won't create cleaner wavefronts.
+  		"""
+		wf_in = self.wf.copy()
+		self.layer.t = t
+		wf_after_atmos = self.layer.forward(wf_in)
+		return self.deformable_mirror.forward(wf_after_atmos)
+
+	def correction(self, num_iterations=200, gain=0.1, leakage=0.999, plot=False, two_stage_niter=100):
+		"""
+		Simulates a full AO loop.
     	"""
-		psfs = []
-		sr = []
+		correction_results = {
+			"phases_for" : [],
+			"wavefronts_after_dm" : [],
+			"pyramid_readings" : [],
+			"dm_commands" : [],
+			"dm_shapes" : [],
+			"point_spread_functions" : [],
+			"strehl_ratios" : [],
+   			"lantern_zernikes_truth" : [],
+			"lantern_zernikes_measured" : []
+		}
 		self.layer.reset()
 		self.layer.t = 0
-		for timestep in trange(num_iterations):
-			#get a clean wavefront
-			wf_in = self.wf.copy()
+		with tqdm(range(num_iterations), file=sys.stdout) as progress:
+			for timestep in progress:
+				wf_after_dm = self.wavefront_after_dm(timestep * self.dt)
+				correction_results["phases_for"].append(self.layer.phase_for(self.wl))
+				pyramid_reading = self.pyramid_optics.reconstruct(wf_after_dm)
+				dm_command = np.copy(pyramid_reading)
+				if timestep > two_stage_niter:
+					hpf_reading = self.pyramid_filter(pyramid_reading[:self.pyramid_filter.n])
+					dm_command[:self.pyramid_filter.n] = hpf_reading
+				if self.ncpa_a != 0:
+					wf_focal = self.focal_propagator.forward(
+						hc.Wavefront(
+							wf_after_dm.electric_field * self.ncpa.electric_field,
+							wavelength = self.wl
+						)
+					)
+				else:
+					wf_focal = self.focal_propagator.forward(wf_after_dm)
 
-			#evolve the atmospheric turbulence
-			self.layer.t = timestep*dt
+				if timestep == two_stage_niter:
+					tqdm.write(f"Closing second-stage loop at iteration {timestep}")
+				if timestep > two_stage_niter:
+					lantern_zernikes_truth = self.zernike_basis.coefficients_for(wf_after_dm.phase)
+					lantern_zernikes_truth[self.ncpa_z] += self.ncpa_a
+					correction_results["lantern_zernikes_truth"].append(lantern_zernikes_truth)
+					lantern_reading = np.abs(self.lantern_optics.lantern_coeffs(wf_focal)) ** 2
+					lantern_zernikes_measured = self.lantern_optics.command_matrix @ lantern_reading
+					lpf_reading = self.lantern_filter(lantern_zernikes_measured)
+					correction_results["lantern_zernikes_measured"].append(lantern_zernikes_measured)
+					dm_command[:self.lantern_filter.n] += lpf_reading
 
-			#pass the wavefront through the turbulence
-			wf_after_atmos = self.layer.forward(wf_in)
-
-			#pass the wavefront through the DM for correction
-			wf_after_dm = self.deformable_mirror.forward(wf_after_atmos)
-
-			#send the wavefront containing the residual wavefront error to the PyWFS and get slopes
-			wfs_image = self.pyramid_optics.readout(wf_after_dm)
-			diff_image = wfs_image - self.pyramid_optics.image_ref
-
-			#Leaky integrator to calculate new DM commands
-			self.deformable_mirror.actuators =  leakage*self.deformable_mirror.actuators - gain * self.pyramid_optics.command_matrix.dot(diff_image)
-
-			# Propagate to focal plane
-			wf_focal = self.focal_propagator.forward(wf_after_dm)
-
-			#calculate the strehl ratio to use as a metric for how well the AO system is performing.
-			strehl_foc = hc.get_strehl_from_focal(wf_focal.intensity/self.norm,self.im_ref.intensity/self.norm)
-			sr.append(float(strehl_foc))
-			psfs.append(wf_focal.copy())
-			
-		#plot the results
-		fig = plt.figure(figsize=(15,8))
-
-		plt.subplot(1,3,1)
-		plt.title(r'DM surface shape ($\mathrm{\mu}$m)')
-		hc.imshow_field(self.aperture*self.deformable_mirror.surface/(1e-6), vmin=-1, vmax=1, cmap='bwr')
-		plt.colorbar(fraction=0.046, pad=0.04)
-
-		plt.subplot(1,3,2)
-		plt.title('Residual wavefront error (rad)')
-		res = wf_after_dm.phase*self.aperture
-		hc.imshow_field(res, cmap='RdBu')
-		plt.colorbar(fraction=0.046, pad=0.04)
-
-		plt.subplot(1,3,3)
-		plt.title('Focal Plane Image (Strehl = %.2f)'% (np.mean(np.asarray(sr))))
-		hc.imshow_field(np.log10(wf_focal.intensity/self.norm), cmap='inferno')
-		plt.colorbar(fraction=0.046, pad=0.04)
-		plt.tight_layout()
-		plt.show()
-		return psfs
-
-
-	
+				correction_results["dm_commands"].append(copy(dm_command))
+				self.deformable_mirror.actuators = leakage * self.deformable_mirror.actuators - gain * dm_command
+				correction_results["wavefronts_after_dm"].append(wf_after_dm.copy())
+				correction_results["pyramid_readings"].append(pyramid_reading)
+				correction_results["dm_shapes"].append(copy(self.deformable_mirror.surface))
+				correction_results["point_spread_functions"].append(wf_focal.copy())
+				strehl_foc = hc.get_strehl_from_focal(wf_focal.intensity/self.norm,self.im_ref.intensity/self.norm)
+				correction_results["strehl_ratios"].append(float(strehl_foc))
+				progress.set_postfix(strehl=f"{float(strehl_foc):.3f}")
+  
+		return correction_results

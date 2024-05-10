@@ -5,11 +5,12 @@ from tqdm import trange
 from .utils import PROJECT_ROOT, date_now
 
 class PyramidOptics:
-    def __init__(self, opt):
+    def __init__(self, opt, dm_basis):
         """
         Make a pyramid wavefront sensor based on an optical setup (SecondStageOptics).
         """
         self.wl = opt.wl
+        self.dm_basis = dm_basis
         self.setup(opt)
         self.make_command_matrix(opt)
 
@@ -20,7 +21,7 @@ class PyramidOptics:
 
         mld = 5
         modradius = mld * opt.wl / opt.telescope_diameter # modulation radius in radians
-        self.modsteps = 4 # needs to be a factor of 4
+        self.modsteps = 12 # needs to be a factor of 4
 
         pwfs = hc.PyramidWavefrontSensorOptics(opt.pupil_grid, pwfs_grid, separation=opt.telescope_diameter, wavelength_0=opt.wl)
         self.mpwfs = hc.ModulatedPyramidWavefrontSensorOptics(pwfs,modradius,self.modsteps)
@@ -37,7 +38,7 @@ class PyramidOptics:
         return img
         
     def make_command_matrix(self, opt, rerun=False):
-        cmd_path = PROJECT_ROOT + f"/data/secondstage_pyramid/cm_{date_now()}.npy"
+        cmd_path = PROJECT_ROOT + f"/data/secondstage_pyramid/cm_{date_now()}_{self.dm_basis}.npy"
         if (not rerun) and os.path.exists(cmd_path):
             self.command_matrix = np.load(cmd_path)
         else:
@@ -45,7 +46,7 @@ class PyramidOptics:
             num_modes = opt.deformable_mirror.num_actuators
             slopes = []
 
-            for ind in trange(num_modes):
+            for ind in range(num_modes):
                 slope = 0
 
                 # Probe the phase response
@@ -61,5 +62,8 @@ class PyramidOptics:
 
             slopes = hc.ModeBasis(slopes)
             self.command_matrix = hc.inverse_tikhonov(slopes.transformation_matrix, rcond=1e-3, svd=None)
-            np.save(PROJECT_ROOT + f"/data/secondstage_pyramid/cm_{date_now()}.npy", self.command_matrix)
+            np.save(PROJECT_ROOT + f"/data/secondstage_pyramid/cm_{date_now()}_{self.dm_basis}.npy", self.command_matrix)
     
+    def reconstruct(self, wf):
+        img = self.readout(wf)
+        return self.command_matrix.dot(img-self.image_ref)

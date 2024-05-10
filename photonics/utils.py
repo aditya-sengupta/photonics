@@ -2,6 +2,8 @@ from datetime import datetime
 import numpy as np
 import os
 from os import path
+from copy import copy
+from hcipy import Field
 
 PROJECT_ROOT = path.dirname(path.dirname(path.abspath(__file__)))
 DATA_PATH = path.join(PROJECT_ROOT, "data")
@@ -21,7 +23,7 @@ def datetime_now():
     return date_now() + "_" + time_now()
 
 def rms(x):
-    return np.sqrt(np.sum(x ** 2))
+    return np.sqrt(np.mean((x - np.mean(x)) ** 2))
 
 def datetime_ms_now():
     dt = datetime.now()
@@ -38,3 +40,12 @@ def angles_relative_to_center(x, y):
     xc, yc = np.mean(x), np.mean(y)
     xd, yd = x - xc, y - yc
     return (np.arctan2(yd, xd) + 3 * np.pi / 2) % (2 * np.pi)
+
+def lmap(f, x):
+    return list(map(f, x))
+
+def nanify(phase_screen, aperture):
+    x = copy(phase_screen)
+    x = x - np.mean(x)
+    x[np.where(aperture == 0)] = np.nan
+    return Field(x, phase_screen.grid)
