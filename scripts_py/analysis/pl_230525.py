@@ -5,8 +5,7 @@ import re
 import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
-sys.path.append("..")
-from photonics.lantern_reader import LanternReader
+from photonics.experiments.lantern_reader import LanternReader
 
 reader = LanternReader(
     nports = 18,

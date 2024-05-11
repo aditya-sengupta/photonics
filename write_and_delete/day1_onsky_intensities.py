@@ -8,7 +8,7 @@ from scipy.stats import linregress
 from tqdm import tqdm
 
 sys.path.append("..")
-from photonics.lantern_reader import LanternReader, PROJECT_ROOT
+from photonics.experiments.lantern_reader import LanternReader, PROJECT_ROOT
 
 # %%
 reader = LanternReader(

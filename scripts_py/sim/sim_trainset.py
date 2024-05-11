@@ -2,7 +2,7 @@
 This script generates training sets for the neural network reconstructor, which is trained on threadripper.
 """
 # %%
-from photonics.lantern_optics import LanternOptics
+from photonics.simulations.lantern_optics import LanternOptics
 import numpy as np
 from tqdm import tqdm
 from photonics.utils import DATA_PATH, datetime_now

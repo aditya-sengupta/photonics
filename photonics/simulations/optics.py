@@ -23,15 +23,13 @@ class Optics:
 			num_airy *= (num_px + 1) / num_px
 		self.focal_grid = hc.make_focal_grid(q=q, num_airy=num_airy, spatial_resolution=spatial_resolution)
 		self.focal_propagator = hc.FraunhoferPropagator(self.pupil_grid, self.focal_grid, focal_length=(self.lantern_fnumber * self.telescope_diameter))
-		self.pupil_wf_ref = self.zernike_to_pupil(4, 0.0)
-		self.focal_wf_ref = self.focal_propagator(self.pupil_wf_ref)
 		self.wf = hc.Wavefront(self.aperture, wavelength=self.wl)
 		self.wf.total_power = 1
 		self.im_ref = self.focal_propagator.forward(self.wf)
 		self.norm = np.max(self.im_ref.intensity)
 		self.turbulence_setup()
 		self.dm_setup(dm_basis)
-		self.zernike_basis = hc.mode_basis.make_zernike_basis(self.deformable_mirror.num_actuators ** 2, self.telescope_diameter, self.pupil_grid, starting_mode=2)
+		self.zernike_basis = hc.mode_basis.make_zernike_basis(self.deformable_mirror.num_actuators, self.telescope_diameter, self.pupil_grid, starting_mode=2)
 		
 	def turbulence_setup(self, fried_parameter=0.5, outer_scale=50, velocity=10.0, seed=1):
 		Cn_squared = hc.Cn_squared_from_fried_parameter(fried_parameter)
@@ -44,21 +42,19 @@ class Optics:
 			self.deformable_mirror = hc.DeformableMirror(influence_functions)
 		elif dm_basis == "modal":
 			modes = hc.make_zernike_basis(num_actuators ** 2, self.telescope_diameter, self.pupil_grid, starting_mode=2)
-			modes = hc.ModeBasis([x * self.aperture for x in modes])
 			self.deformable_mirror = hc.DeformableMirror(modes)
 		else:
 			raise NameError("DM basis needs to be zonal or modal")
  
 	def zernike_to_phase(self, zernike, amplitude):
-		if isinstance(zernike, list) and isinstance(amplitude, list):
-			phase = hc.Field(sum(a * hc.mode_basis.zernike_ansi(z, D=self.telescope_diameter)(self.pupil_grid).shaped for (z, a) in zip(zernike, amplitude)).ravel(), self.pupil_grid)
-		else:
-			phase = amplitude * hc.mode_basis.zernike_ansi(zernike, D=self.telescope_diameter)(self.pupil_grid)
-		return phase
+		amplitudes = np.zeros(self.deformable_mirror.num_actuators)
+		zernike, amplitude = np.array(zernike), np.array(amplitude)
+		amplitudes[zernike] = amplitude
+		return self.zernike_basis.linear_combination(amplitudes)
 
 	def phase_to_pupil(self, phase):
 		aberration = np.exp(1j * phase)
-		wavefront = hc.Wavefront(self.aperture * aberration, wavelength=self.wl*1e-6)
+		wavefront = hc.Wavefront(self.aperture * aberration, wavelength=self.wl)
 		return wavefront
 	
 	def zernike_to_pupil(self, zernike, amplitude):

@@ -13,7 +13,7 @@ from matplotlib import pyplot as plt
 from hcipy import imshow_field
 from photonics import DATA_PATH
 from photonics.utils import rms, nanify, lmap
-from photonics.second_stage import correction
+from photonics.simulations.second_stage import correction
 from juliacall import Main as jl
 jl.seval("using Flux")
 jl.seval("using JLD2")

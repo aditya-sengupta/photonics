@@ -6,16 +6,18 @@ import lightbeam as lb
 from hcipy import imshow_field
 from matplotlib import pyplot as plt
 from tqdm import trange
-from .utils import PROJECT_ROOT, date_now
+from ..utils import PROJECT_ROOT, date_now, zernike_names
+from .command_matrix import make_command_matrix
 
 class LanternOptics:
-	def __init__(self, optics, f_number):
-		self.nports = 19 # update this later
-		self.nmodes = 9 # update this later as well
-		self.f_number = f_number
+	def __init__(self, optics, nports=19, nmodes=9):
+		self.name = f"lantern_ports{nports}_modes{nmodes}"
+		self.nports = nports # update this later
+		self.nmodes = nmodes # update this later as well
+		self.f_number = optics.lantern_fnumber
 		mesh_extent, mesh_spacing = optics.mesh_extent, optics.mesh_spacing
 		self.telescope_diameter = optics.telescope_diameter
-		self.wl = 1.55
+		self.wl = optics.wl
 		self.final_scale = 8 # tapering factor of lantern
 		self.cladding_radius = 37/2 * self.final_scale
 		self.core_offset = self.cladding_radius / 2.5 # offset of cores from origin
@@ -27,14 +29,14 @@ class LanternOptics:
 		self.lant = lb.optics.make_lant19(self.core_offset,self.rcore,self.cladding_radius,0,self.z_ex, (self.ncore,self.nclad,self.njack),final_scale=1/self.final_scale)
 		self.make_mesh(mesh_extent, mesh_spacing)
 		self.launch_fields = [
-			lb.normalize(lb.lpfield(self.xg-pos[0], self.yg-pos[1], 0, 1, self.rcore, self.wl, self.ncore, self.nclad))
+			lb.normalize(lb.lpfield(self.xg-pos[0], self.yg-pos[1], 0, 1, self.rcore, self.wl*1e6, self.ncore, self.nclad))
 			for pos in self.lant.init_core_locs
 		]
 		self.plotting_launch_fields = [
-			lb.normalize(lb.lpfield(self.xg-pos[0], self.yg-pos[1], 0, 1, 5 * self.rcore, self.wl, self.ncore, self.nclad))
+			lb.normalize(lb.lpfield(self.xg-pos[0], self.yg-pos[1], 0, 1, 5 * self.rcore, self.wl*1e6, self.ncore, self.nclad))
 			for pos in self.lant.init_core_locs
 		]
-		self.lbprop = lb.Prop3D(self.wl, self.mesh, self.lant, self.nclad)
+		self.lbprop = lb.Prop3D(self.wl*1e6, self.mesh, self.lant, self.nclad)
 		self.lantern_basis = np.array([lf.ravel() for lf in self.launch_fields]).T
 		self.lantern_reverse = np.linalg.inv(self.lantern_basis.T @ self.lantern_basis) @ self.lantern_basis.T
 		out = np.zeros_like(self.xg)
@@ -44,7 +46,8 @@ class LanternOptics:
 		self.extent_x = (np.min(self.input_footprint[0]), np.max(self.input_footprint[0]))
 		self.extent_y = (np.min(self.input_footprint[1]), np.max(self.input_footprint[1]))
 		self.load_outputs()
-		self.make_command_matrix(optics, self.nmodes)
+		self.focal_propagator = optics.focal_propagator
+		make_command_matrix(optics.deformable_mirror, self, optics.wf, rerun=True)
 
 	def input_to_2d(self, input_efield, zoomed=True):
 		"""
@@ -101,7 +104,7 @@ class LanternOptics:
 		np.save(PROJECT_ROOT + "/data/backprop_19.npy", np.array(outputs))
 		
 	def load_outputs(self):
-		outputs = np.load(PROJECT_ROOT + "/data/backprop_19.npy")
+		outputs = np.load(join(PROJECT_ROOT, "data", "backprop_19.npy"))
 		self.outputs = np.array([self.sanitize_output(x) for x in outputs])
 		self.projector = np.linalg.inv(self.outputs @ self.outputs.T) @ self.outputs
 
@@ -115,10 +118,15 @@ class LanternOptics:
 		lantern_reading = sum(c * lf for (c, lf) in zip(coeffs, self.launch_fields))
 		return coeffs, lantern_reading
 
+	def readout(self, wf):
+		return np.abs(
+			self.lantern_coeffs(self.focal_propagator(wf))
+		) ** 2
+
 	def show_lantern_output(self, focal_field):
 		coeffs = self.lantern_coeffs(focal_field)
 		lantern_reading = np.abs(sum(c * lf for (c, lf) in zip(coeffs, self.plotting_launch_fields))) ** 2
-		fig, axs = plt.subplots(1, 3)
+		fig, axs = plt.subplots(1, 2)
 		fig.suptitle("Photonic lantern response")
 		fig.subplots_adjust(top=1.4, bottom=0.0)
 		for ax in axs:
@@ -130,50 +138,23 @@ class LanternOptics:
 		axs[1].set_title("Lantern output")
 		plt.show()
 		
-	def make_command_matrix(self, optics, rerun=True):
-		dm = optics.deformable_mirror
-		dm.flatten()
-		self.image_ref = np.abs(self.lantern_coeffs(optics.focal_propagator(dm.forward(optics.wf)))) ** 2
-		cmd_path = join(PROJECT_ROOT, "data", "secondstage_lantern", f"cm_{date_now()}_{optics.dm_basis}.npy")
-		if (not rerun) and os.path.exists(cmd_path):
-			self.command_matrix = np.load(cmd_path)
-		else:
-			probe_amp = 0.01 * self.wl / (4 * np.pi)
-			num_modes = self.nmodes
-			slopes = []
-
-			for ind in range(num_modes):
-				slope = 0
-
-				# Probe the phase response
-				for s in [1, -1]:
-					amp = np.zeros((dm.num_actuators,))
-					amp[ind] = s * probe_amp
-					dm.actuators = amp
-					dm_wf = dm.forward(optics.wf)
-					image = self.lantern_coeffs(optics.focal_propagator(dm_wf))
-					slope += s * (image - self.image_ref) / (2 * probe_amp)
-
-				slopes.append(slope)
-
-			dm.flatten()
-			slopes = hc.ModeBasis(slopes)
-			self.command_matrix = hc.inverse_tikhonov(slopes.transformation_matrix, rcond=1e-3, svd=None)
-			np.save(join(PROJECT_ROOT, "data", "secondstage_lantern", f"cm_{date_now()}_{optics.dm_basis}.npy"), self.command_matrix)
-  
 	def make_linearity(self, optics, lim=0.1, step=None):
+		conversion = (4 * np.pi / self.wl)
 		dm = optics.deformable_mirror
 		if step is None:
 			step = lim / 4
 		amplitudes = np.arange(-lim, lim*1.001, step)
 		linearity_responses = np.zeros((self.nmodes, len(amplitudes), self.nmodes))
-		for z in range(self.nmodes):
-			for (j,a) in enumerate(amplitudes):
-				dm.actuators[z] = a * self.wl / (4 * np.pi)
-				focal_wavefront = optics.focal_propagator(dm.forward(optics.wf))
-				flattened = np.abs(self.lantern_coeffs(focal_wavefront)) ** 2 - self.image_ref
-				response = self.command_matrix @ flattened
-				linearity_responses[z,j,:] = response
+		dm.flatten()
+		for ind in range(self.nmodes):
+			for (j, a) in enumerate(amplitudes):
+				amp = np.zeros((dm.num_actuators,))
+				amp[ind] = a / conversion
+				dm.actuators = amp
+				lantern_image = self.readout(dm.forward(optics.wf))
+				flattened = lantern_image - self.image_ref
+				response = self.command_matrix.dot(flattened)[:self.nmodes]
+				linearity_responses[ind,j,:] = response * conversion
 			dm.flatten()
 		
 		return amplitudes, linearity_responses
@@ -185,21 +166,21 @@ class LanternOptics:
 		for i in range(nzern):
 			r, c = i // 3, i % 3
 			axs[r][c].set_ylim([min(amplitudes), max(amplitudes)])
-			axs[r][c].title.set_text(f"Z{i+1}")
+			axs[r][c].title.set_text(zernike_names[i])
 			for j in range(nzern):
-				alpha = 1 if i == j else 0.1
+				alpha = 1 if i == j else 0.3
 				axs[r][c].plot(amplitudes, linearity_responses[i,:,j], alpha=alpha)
 		plt.show()
 		
 	def forward(self, pupil):
 		focal = self.prop.forward(pupil)
 		_, _, reading = self.lantern_output(focal)
-		return hc.Wavefront(hc.Field(reading.ravel(), self.focal_grid), wavelength=self.wl*1e-6)
+		return hc.Wavefront(hc.Field(reading.ravel(), self.focal_grid), wavelength=self.wl)
 	
 	def backward(self, reading):
 		coeffs = self.lantern_reverse @ reading.electric_field
 		lantern_input = self.input_to_2d(coeffs @ self.outputs, zoomed=False)
-		focal_wf = hc.Wavefront(hc.Field(lantern_input.ravel(), self.focal_grid), wavelength=self.wl*1e-6)
+		focal_wf = hc.Wavefront(hc.Field(lantern_input.ravel(), self.focal_grid), wavelength=self.wl)
 		pupil_field = self.prop.backward(focal_wf)
 		return pupil_field
 		 

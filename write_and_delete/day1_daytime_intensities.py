@@ -12,7 +12,7 @@ from scipy.signal import find_peaks
 from tqdm import tqdm
 
 from photonics import PROJECT_ROOT
-from photonics.lantern_reader import LanternReader
+from photonics.experiments.lantern_reader import LanternReader
 
 reader = LanternReader(
     nports = 18,

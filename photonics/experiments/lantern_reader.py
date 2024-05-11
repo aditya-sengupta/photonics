@@ -13,7 +13,7 @@ from photutils.detection import DAOStarFinder
 from scipy.spatial import ConvexHull
 import warnings
 
-from .utils import date_now, datetime_now, angles_relative_to_center, DATA_PATH
+from ..utils import date_now, datetime_now, angles_relative_to_center, DATA_PATH
 
 class LanternReader:
     """

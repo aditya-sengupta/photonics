@@ -10,6 +10,11 @@ DATA_PATH = path.join(PROJECT_ROOT, "data")
 if not os.path.isdir(DATA_PATH):
     os.mkdir(DATA_PATH)
     
+# following the ShaneAO convention
+zernike_names = [
+    "tip", "tilt", "focus", "astig", "astig45", "coma90", "coma", "tricoma90", "tricoma", "spherical", "astig5th45", "astig5th"
+] + [f"Z{i}" for i in range(12, 82)]
+    
 def is_list_or_dim1_array(x):
     return isinstance(x, list) or (isinstance(x, np.ndarray) and len(x.shape) == 1)
 
@@ -50,4 +55,8 @@ def nanify(phase_screen, aperture):
     x[np.where(aperture == 0)] = np.nan
     return Field(x, phase_screen.grid)
 
-imshow_psf = lambda x: imshow_field(np.log10(x), vmin=-5)
+def imshow_psf(f: Field):
+    imshow_field(np.log10(f), vmin=-5)
+
+def peak_to_valley(x):
+    return np.max(x) - np.min(x)

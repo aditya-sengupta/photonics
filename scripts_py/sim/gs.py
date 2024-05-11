@@ -1,5 +1,5 @@
 # %%
-from photonics.lantern_optics import LanternOptics
+from photonics.simulations.lantern_optics import LanternOptics
 
 lo = LanternOptics(f_number=10.0)
 # %%
