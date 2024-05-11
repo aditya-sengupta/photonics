@@ -7,7 +7,7 @@ import os
 import numpy as np
 from matplotlib import pyplot as plt
 from photonics.utils import PROJECT_ROOT
-from photonics.decometify import intensities_from_comet
+from photonics.experiments.decometify import intensities_from_comet
 from photonics.linearity import make_interaction_matrix, make_linearity, plot_linearity, interpolate_weights, linearity_loss
 from tqdm import tqdm
 

@@ -3,12 +3,17 @@ import numpy as np
 import os
 from os import path
 from copy import copy
-from hcipy import Field
+from hcipy import Field, imshow_field
 
 PROJECT_ROOT = path.dirname(path.dirname(path.abspath(__file__)))
 DATA_PATH = path.join(PROJECT_ROOT, "data")
 if not os.path.isdir(DATA_PATH):
     os.mkdir(DATA_PATH)
+    
+# following the ShaneAO convention
+zernike_names = [
+    "tip", "tilt", "focus", "astig", "astig45", "coma90", "coma", "tricoma90", "tricoma", "spherical", "astig5th45", "astig5th"
+] + [f"Z{i}" for i in range(12, 82)]
     
 def is_list_or_dim1_array(x):
     return isinstance(x, list) or (isinstance(x, np.ndarray) and len(x.shape) == 1)
@@ -49,3 +54,9 @@ def nanify(phase_screen, aperture):
     x = x - np.mean(x)
     x[np.where(aperture == 0)] = np.nan
     return Field(x, phase_screen.grid)
+
+def imshow_psf(f: Field):
+    imshow_field(np.log10(f), vmin=-5)
+
+def peak_to_valley(x):
+    return np.max(x) - np.min(x)

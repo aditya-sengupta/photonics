@@ -10,7 +10,7 @@ import warnings
 import paramiko
 
 from .decometify import intensities_from_comet
-from .utils import date_now, datetime_ms_now, time_ms_now, rms, DATA_PATH
+from ..utils import date_now, datetime_ms_now, time_ms_now, rms, DATA_PATH
 
 def normalize(x):
 	return x / np.sum(x)

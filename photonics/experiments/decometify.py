@@ -1,6 +1,6 @@
 import numpy as np
 
-from .utils import PROJECT_ROOT
+from ..utils import PROJECT_ROOT
 
 directory_240424 = PROJECT_ROOT + "/data/pl_240424"
 

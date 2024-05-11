@@ -1,5 +1,5 @@
 # %%
-from photonics.lantern_optics import LanternOptics
+from photonics.simulations.lantern_optics import LanternOptics
 import numpy as np
 from tqdm import trange
 from photonics.utils import DATA_PATH

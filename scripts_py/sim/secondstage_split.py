@@ -3,29 +3,36 @@ from IPython import get_ipython
 get_ipython().run_line_magic("load_ext", "autoreload")
 get_ipython().run_line_magic("autoreload", "2")
 
+# %%
+from functools import partial
 import numpy as np
 import hcipy as hc
 from hcipy import imshow_field
 from matplotlib import pyplot as plt
 from photonics.utils import lmap, rms
-from photonics.second_stage_optics import SecondStageOptics
+from photonics import Optics, PyramidOptics, LanternOptics, correction
+
 # %%
-sso = SecondStageOptics(f_loop=800, dm_basis="modal", ncpa_z=2, ncpa_a=0.0)
-sso.turbulence_setup(fried_parameter=0.1, seed=10)
+n_filter = 9
+f_cutoff = 30
+f_loop = 100
+dt = 1/f_loop
+optics = Optics(lantern_fnumber=6.5, dm_basis="modal")
+pyramid = PyramidOptics(optics)
+lantern = LanternOptics(optics)
+optics.turbulence_setup(fried_parameter=0.5, seed=10)
+corr = partial(correction, optics=optics, pyramid=pyramid, lantern=lantern)
+focus_ncpa = optics.zernike_to_pupil(2, 0.3)
 # %%
-lo = sso.lantern_optics
+open_loop = corr(use_lantern=False, use_pyramid=False, ncpa=focus_ncpa)
 # %%
-pyramid_correction = sso.correction(num_iterations=200, two_stage_niter=201)
+pyramid_correction = corr(use_pyramid=True)
 # %%
-lantern_correction = lo.correction(sso.layer, sso.deformable_mirror)
+pyramid_correction_with_ncpa = corr(use_pyramid=True, ncpa=focus_ncpa)
 # %%
-lo.readout(pyramid_correction["wavefronts_after_dm"][0])
+lantern_correction = corr(use_lantern=True)
 # %%
-sso.deformable_mirror.actuators[2] = sso.wl * 0.1
-wf_after_dm = sso.deformable_mirror.forward(sso.wf)
-focal_image = sso.focal_propagator(wf_after_dm)
-fig, axs = plt.subplots(1, 2, figsize=(10,5))
-imshow_field(np.log10(focal_image.intensity / np.max(focal_image.intensity)), ax=axs[0])
-plt.imshow(np.abs(lo.lantern_output_to_plot(focal_image)) ** 2)
-sso.deformable_mirror.flatten()
+lantern_correction_with_ncpa = corr(use_lantern=True, ncpa=focus_ncpa)
+# %%
+twostage_correction = corr(use_pyramid=True, use_lantern=True, ncpa=focus_ncpa)
 # %%

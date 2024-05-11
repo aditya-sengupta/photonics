@@ -2,7 +2,7 @@ import numpy as np
 from time import sleep
 from tqdm import tqdm, trange
 
-from .utils import rms
+from ..utils import rms
 
 def reconstruction_reliability(plwfs, slm, dm_slm, lim=0.05, nmodes=10, ntry=5):
     slm.reset()

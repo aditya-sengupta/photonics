@@ -4,7 +4,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from tqdm import trange
 
-def interpolate_weights(arr, x):
+def interpolate_weights(arr: np.ndarray, x: float):
 	"""
 	Given a sorted array arr and some arr[0] < x < arr[-1], finds the left index idx and the left weight w such that x = w * arr[idx] + (1 - w) * arr[idx+1].
 	
