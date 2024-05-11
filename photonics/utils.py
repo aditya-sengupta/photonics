@@ -3,7 +3,7 @@ import numpy as np
 import os
 from os import path
 from copy import copy
-from hcipy import Field
+from hcipy import Field, imshow_field
 
 PROJECT_ROOT = path.dirname(path.dirname(path.abspath(__file__)))
 DATA_PATH = path.join(PROJECT_ROOT, "data")
@@ -49,3 +49,5 @@ def nanify(phase_screen, aperture):
     x = x - np.mean(x)
     x[np.where(aperture == 0)] = np.nan
     return Field(x, phase_screen.grid)
+
+imshow_psf = lambda x: imshow_field(np.log10(x), vmin=-5)
