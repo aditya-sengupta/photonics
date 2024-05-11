@@ -9,7 +9,7 @@ def correction(
 	optics, pyramid, lantern, 
 	ncpa=None, f_cutoff=30,
  	f_loop=100, num_iterations=200, gain=0.1, leakage=0.999, 
-	use_pyramid=True, use_lantern=True
+	use_pyramid=False, use_lantern=False
 ):
 	"""
 	Simulates a full two-stage AO loop.
@@ -81,6 +81,7 @@ def correction(
 
 			correction_results["dm_commands"].append(copy(dm_command))
 			dm.actuators = leakage * dm.actuators - gain * dm_command
-			progress.set_postfix(strehl=f"{float(strehl_foc):.3f}")
+			strehl_averaged = np.mean(correction_results["strehl_ratios"][max(0,timestep-10):timestep+1])
+			progress.set_postfix(strehl=f"{float(strehl_averaged):.3f}")
 
 	return correction_results
