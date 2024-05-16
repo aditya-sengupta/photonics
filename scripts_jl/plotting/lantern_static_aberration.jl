@@ -32,7 +32,7 @@ heatmap(log10.(psf_after)[m...], c=:grays)
 
 begin
     p = plot(vcat(rms_before, rms_during, rms_after) / (2pi / λ), xlabel="Number of iterations", ylabel="Wavefront error measured on the PL (nm)", label=nothing, ylim=(0, 170), title="Correcting a static aberration with the photonic lantern", titlefontsize=13, dpi=800)
-    vspan!([20, 60], color=RGBA(0.76, 1, 0.76, 1), alpha=0.3, label="Loop closed")
+    vspan!([20, 60], color=RGBA(0.2, 1, 0.2, 1), alpha=0.3, label="Loop closed")
     BB1 = bbox(0.01, 0.2, 0.3, 0.3)
     BB2 = bbox(0.65, 0.2, 0.3, 0.3)
     BB3 = bbox(0.01, 0.6, 0.2, 0.3)
@@ -41,6 +41,6 @@ begin
     im_show!(phase_screen_final * (λ / (2pi)), inset=(1, BB2), clim=(-λ/2, λ/2), subplot=3, title="Final phase (nm)", titlefontsize=7, background_color_subplot=RGBA(0, 0, 0, 0), background_alpha_subplot=0.0, ytickfontsize=6, topmargin=-2mm)
     heatmap!(log10.(psf_before[m...]), c=:grays, showaxis=false, grid=false, inset=(1, BB3), subplot=4, title="Initial image", titlefontsize=7, xlim=(0, length(m[1])), ylim=(0, length(m[2])), legend=nothing, yflip=true, topmargin=-2mm)
     heatmap!(log10.(psf_after[m...]), c=:grays, showaxis=false, grid=false, inset=(1, BB4), subplot=5, title="Final image", titlefontsize=7, xlim=(0, length(m[1])), ylim=(0, length(m[2])), legend=nothing, yflip=true, topmargin=-2mm)
-    Plots.savefig("./figures/seal_static_cl.png")
+    Plots.savefig("./figures/seal_static_cl.pdf")
     p
 end

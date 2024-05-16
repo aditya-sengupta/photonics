@@ -1,11 +1,9 @@
-from .utils import *
-from .linearity import *
+from matplotlib import pyplot as plt
 
-from .experiments.calibrate_dm import *
-from .experiments.lantern_reader import *
-from .experiments.seal import *
-
-from .simulations.lantern_optics import *
-from .simulations.optics import *
-from .simulations.pyramid_optics import *
-from .simulations.second_stage import *
+plt.rc('font', family='serif',size=12)
+plt.rcParams.update({
+    "text.usetex": False,
+    "font.family": "serif",
+    "font.serif" : "cmr10",
+    "axes.formatter.use_mathtext" : True
+})

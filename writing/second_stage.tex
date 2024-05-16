@@ -1,0 +1,81 @@
+\documentclass{article}
+
+\usepackage{custom}
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows,positioning}
+
+\begin{document}
+\tikzstyle{block} = [draw, rectangle, 
+    minimum height=3em, minimum width=6em]
+\tikzstyle{sum} = [draw, fill=white, circle, node distance=1cm]
+\tikzstyle{input} = [coordinate]
+\tikzstyle{output} = [coordinate]
+\tikzstyle{pinstyle} = [pin edge={to-,thin,black}]
+\tikzstyle{gain} = [draw, fill=white, isosceles triangle, isosceles triangle apex angle = 60, shape border rotate=#1]
+
+\begin{tikzpicture}[auto, node distance=3cm,>=latex', text width=2.2cm, align=center]
+    \node [name=disturbance] {Atmospheric disturbance};
+    \node [right of=disturbance, color=blue, node distance=5.5cm] (firststage) {Single-WFS configuration};
+    \node [right of=firststage, color=red, opacity=0.5, node distance=4cm] (secondstage) {Double-WFS configuration};
+    \node [sum, below of=disturbance, node distance=2cm, text width=0.5cm] (dm) {+};
+    \node [draw, rectangle, below of=dm, node distance=2cm, minimum height=2em, minimum width=2em, text width=0.1cm, color=gray] (beamsplitter) {};
+    \node [input, below right=1em and 1em of beamsplitter.center, anchor=center] (beamsplitterbr) {};
+    \node [input, above left=1em and 1em of beamsplitter.center, anchor=center] (beamsplittertl) {};
+    \node [input, below of=beamsplitter, node distance=2cm] (turn) {};
+    \node [name=beamsplittertext, left of=beamsplitter, node distance=1.0cm] {Beam\\splitter};
+    \node [block, minimum height=5em] (dmblock) at (dm) {};
+    \node [above right=1.5em and 2em of dmblock.center, anchor=center] (dmtext) {DM};
+    \node [block, right of=turn] (pl) {Photonic lantern};
+    \node [block, right of=pl] (plrecon) {Lantern reconstructor};
+    \node [block, right of=plrecon] (lpf) {Low pass filter};
+    \node [block, right of=beamsplitter] (pywfs) {Pyramid WFS};
+    \node [block, right of=pywfs,] (pyrecon) {Pyramid reconstructor};
+    \node [input, right of=pyrecon, node distance=1.5cm] (pyswitch) {};
+    \node [block, right of=pyswitch, node distance=1.5cm] (hpf) {High pass \\ filter};
+    \node [input, above of=pyswitch, node distance=0.9cm] (turn4) {};
+    \node [input, right of=hpf, node distance=1.4cm] (turn6) {};
+    \node [input, right of=hpf, node distance=2.5cm] (hpfjoin) {};
+    \node [input, above of=hpfjoin, node distance=0.9cm] (hpfjoinref) {};
+    \node [input, left of=hpfjoinref, node distance=0.6325cm] (turn7) {};
+    \node[input, below of=turn6, node distance=2cm] (lpfleftjoin) {};
+    \node [input, below of=hpfjoin, node distance=2cm] (lpfjoin) {};
+    \node [input, below of=turn7, node distance=2cm] (turn8) {};
+    \node [sum, right of=hpf, text width=0.5cm, node distance=3.5cm] (sum2) {+};
+    \node [input, right of=lpf, node distance=3.5cm] (turn2) {};
+    \node [input, above of=sum2, node distance=2cm] (turn3) {};
+    \node [gain, left of=turn3, shape border rotate=-180, text width=0.8cm, node distance=2.5cm] (gain) {Gain};
+    \node [block, left of=gain, node distance=4.5cm] (integ) {Integrator};
+
+    \filldraw (lpfjoin) circle (1pt);
+    \filldraw (lpfleftjoin) circle (1pt);
+    \filldraw (hpfjoin) circle (1pt);
+    \filldraw (turn7) circle (1pt);
+    \filldraw (turn6) circle (1pt);
+    \filldraw (turn8) circle (1pt);
+
+    \path[draw,->] (disturbance) -- (dm);
+    \path[draw,->] (dm) -- (beamsplitter.center);
+    \path[draw,-,color=gray] (beamsplittertl) -- (beamsplitterbr);
+    \path[draw,->] (beamsplitter.center) -- (pywfs);
+    \path[draw,->] (pywfs) -- (pyrecon);
+    \path[draw,->] (pyrecon) -- (hpf);
+    \path[draw,->] (hpfjoin) -- (sum2);
+    \path[draw,-] (hpf) -- (turn6);
+    \path[draw,-] (pyswitch) -- (turn4) -- (turn7);
+    \path[draw,-] (beamsplitter.center) -- (turn);
+    \path[draw,->] (turn) -- (pl);
+    \path[draw,->] (pl) -- (plrecon);
+    \path[draw,->] (plrecon) -- (lpf);
+    \path[draw,-] (lpf) -- (lpfleftjoin);
+    \path[draw,-] (lpfjoin) -- (turn2);
+    \path[draw,->] (turn2) -- (sum2);
+    \path[draw,-] (sum2) -- (turn3);
+    \path[draw,->] (turn3) -- (gain);
+    \path[draw,->] (gain) -- (integ);
+    \path[draw,->] (integ) -- (dm) node[above, pos=0.95] {--};
+    \path[draw,-,color=blue] (turn7) -- (hpfjoin);
+    \path[->,color=red,opacity=0.5] (turn7) edge[bend right] (turn6);
+    \path[draw,-,color=blue] (turn8) -- (lpfjoin);
+    \path[->,color=red,opacity=0.5] (turn8) edge[bend right] (lpfleftjoin);
+\end{tikzpicture}
+\end{document}
