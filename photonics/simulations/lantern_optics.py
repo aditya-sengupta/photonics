@@ -1,4 +1,3 @@
-import os
 from os.path import join
 import numpy as np
 import hcipy as hc
@@ -6,10 +5,15 @@ import lightbeam as lb
 from hcipy import imshow_field
 from matplotlib import pyplot as plt
 from tqdm import trange
-from ..utils import PROJECT_ROOT, date_now, zernike_names
+from ..utils import PROJECT_ROOT, date_now, zernike_names, nanify
 from .command_matrix import make_command_matrix
 
 class LanternOptics:
+	"""
+	Implements the optics around a photonic lantern and wraps propagations from Lightbeam to determine the lantern's behaviour.
+ 
+	Need to ask Emiel about the canonical hcipy way of organizing this vs. the parent "optics" class.
+	"""
 	def __init__(self, optics, nports=19, nmodes=9):
 		self.name = f"lantern_ports{nports}_modes{nmodes}"
 		self.nports = nports # update this later
@@ -47,6 +51,7 @@ class LanternOptics:
 		self.extent_y = (np.min(self.input_footprint[1]), np.max(self.input_footprint[1]))
 		self.load_outputs()
 		self.focal_propagator = optics.focal_propagator
+		self.focal_grid = optics.focal_grid
 		make_command_matrix(optics.deformable_mirror, self, optics.wf, rerun=True)
 
 	def input_to_2d(self, input_efield, zoomed=True):
@@ -172,55 +177,68 @@ class LanternOptics:
 				axs[r][c].plot(amplitudes, linearity_responses[i,:,j], alpha=alpha)
 		plt.show()
 		
-	def forward(self, pupil):
-		focal = self.prop.forward(pupil)
-		_, _, reading = self.lantern_output(focal)
-		return hc.Wavefront(hc.Field(reading.ravel(), self.focal_grid), wavelength=self.wl)
+	def forward(self, optics, pupil):
+		focal = self.focal_propagator.forward(pupil)
+		_, reading = self.lantern_output(focal)
+		return hc.Wavefront(hc.Field(reading.ravel(), optics.focal_grid), wavelength=self.wl)
 	
-	def backward(self, reading):
+	def backward(self, optics, reading):
 		coeffs = self.lantern_reverse @ reading.electric_field
 		lantern_input = self.input_to_2d(coeffs @ self.outputs, zoomed=False)
 		focal_wf = hc.Wavefront(hc.Field(lantern_input.ravel(), self.focal_grid), wavelength=self.wl)
-		pupil_field = self.prop.backward(focal_wf)
+		pupil_field = self.focal_propagator.backward(focal_wf)
 		return pupil_field
-		 
-	def GS(self, img, niter=10):
-		"""
-		Gerchberg-Saxton algorithm
-		"""        
+
+	def GS_init(self, optics, img):
 		# Normalization
 		img /= img.sum()
 		
 		# Amplitude in - measured (or assumed to be known)
-		measuredAmplitude_in = self.pupil_wf_ref
+		measuredAmplitude_in = optics.wf
 		# Amplitude out - measured
 		measuredAmplitude_out = np.sqrt(img) 
-		
 		# Forward Propagation in WFS assuming 0 phase
-		EM_out = self.forward(measuredAmplitude_in)
+		EM_out = self.forward(optics, measuredAmplitude_in)
 		# replacing by known amplitude
 		phase_out_0 = EM_out.phase
 		EM_out = measuredAmplitude_out * np.exp(1j*phase_out_0)
 		# Back Propagation in PWFS
-		EM_in = self.backward(hc.Wavefront(EM_out, wavelength=self.wl))
+		EM_in = self.backward(optics, hc.Wavefront(EM_out, wavelength=self.wl))
+		return EM_in, measuredAmplitude_in, measuredAmplitude_out
+
+	def GS_iteration(self, optics, EM_in, measuredAmplitude_in, measuredAmplitude_out):
+		# replacing by known amplitude
+		phase_in_k = EM_in.phase
+		EM_in = hc.Wavefront(measuredAmplitude_in.electric_field*np.exp(1j*phase_in_k),wavelength=self.wl)
+		# Lantern forward propagation
+		EM_out = self.forward(optics, EM_in)
+		# replacing by known amplitude
+		phase_out_k = EM_out.phase
+		EM_out = hc.Wavefront(measuredAmplitude_out*np.exp(1j*phase_out_k), wavelength=self.wl)
+		# Lantern backward propagation    
+		EM_in = self.backward(optics, EM_out)
+			
+		return EM_in
+
+	def GS(self, optics, img, niter=10):
+		"""
+		Gerchberg-Saxton algorithm
+		"""
+		EM_in, measuredAmplitude_in, measuredAmplitude_out = self.GS_init(optics, img)
+		print(EM_in)
 		for _ in trange(niter):
-			# replacing by known amplitude
-			phase_in_k = EM_in.phase
-			EM_in = hc.Wavefront(measuredAmplitude_in.electric_field*np.exp(1j*phase_in_k),wavelength=self.wl)
-			# Lantern forward propagation
-			EM_out = self.forward(EM_in)
-			# replacing by known amplitude
-			phase_out_k = EM_out.phase
-			EM_out = hc.Wavefront(measuredAmplitude_out*np.exp(1j*phase_out_k), wavelength=self.wl)
-			# Lantern backward propagation    
-			EM_in = self.backward(EM_out)
+			EM_in = self.GS_iteration(optics, EM_in, measuredAmplitude_in, measuredAmplitude_out)
 			
 		return EM_in
 	
-	def show_GS(self, zernike, amplitude, niter=10):
-		input_phase = self.zernike_to_phase(zernike, amplitude)
-		reading = self.forward(self.phase_to_pupil(input_phase))
-		retrieved = self.GS(reading.intensity, niter=niter)
+	def show_GS(self, optics, zernike, amplitude, niter=10):
+		input_phase = optics.zernike_to_phase(zernike, amplitude)
+		input_pupil = optics.phase_to_pupil(input_phase)
+		reading = self.forward(optics, input_pupil)
+		input_focal = self.focal_propagator.forward(input_pupil)
+		coeffs = self.lantern_coeffs(input_focal)
+		out_to_plot = np.abs(sum(c * lf for (c, lf) in zip(coeffs, self.plotting_launch_fields))) ** 2
+		retrieved = self.GS(optics, reading.intensity, niter=niter)
 		retphase = retrieved.phase # (retrieved.phase % np.pi) - np.pi / 2
 		fig, axs = plt.subplots(1, 3)
 		fig.suptitle(f"Lantern phase retrieval, Zernike {zernike}, amplitude {amplitude}")
@@ -230,20 +248,21 @@ class LanternOptics:
 			ax.set_yticks([])
 		# vmin = np.minimum(np.min(input_phase), np.min(retphase))
 		# vmax = np.maximum(np.max(input_phase), np.max(retphase))
-		axs[0].imshow(input_phase.shaped)
+		axs[0].imshow(nanify(input_phase.shaped, optics.aperture.shaped), cmap="RdBu")
 		axs[0].set_title("Phase screen")
-		axs[1].imshow(np.abs(reading.intensity.shaped))
+		axs[1].imshow(out_to_plot)
 		axs[1].set_title("Lantern output")
-		hc.imshow_field(retphase * self.aperture, ax=axs[2])
+		axs[2].imshow(nanify(retphase.shaped, optics.aperture.shaped), cmap="RdBu")
 		axs[2].set_title("Retrieved phase")
 		plt.show()
   
 	def plot_outputs(self):
-		fig, axs = plt.subplots(5, 4)
+		rm, cm = 4, 5
+		fig, axs = plt.subplots(rm, cm)
 		plt.suptitle("Photonic lantern entrance modes")
-		plt.subplots_adjust(wspace=-0.7, hspace=0.1)
+		plt.subplots_adjust(wspace=0.05, hspace=0.05)
 		for (i, o) in enumerate(self.outputs):
-			r, c = i // 4, i % 4
+			r, c = i // cm, i % cm
 			axs[r][c].imshow(np.abs(self.input_to_2d(o)))
 			axs[r][c].set_xticks([])
 			axs[r][c].set_yticks([])

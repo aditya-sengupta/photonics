@@ -1,0 +1,57 @@
+\documentclass{article}
+
+\usepackage{custom}
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows,positioning,decorations.pathmorphing}
+
+\begin{document}
+\tikzstyle{block} = [draw, rectangle, 
+    minimum height=3em, minimum width=6em]
+\tikzstyle{sum} = [draw, fill=white, circle, node distance=1cm]
+\tikzstyle{input} = [coordinate]
+\tikzstyle{output} = [coordinate]
+\tikzstyle{pinstyle} = [pin edge={to-,thin,black}]
+\tikzstyle{gain} = [draw, fill=white, isosceles triangle, isosceles triangle apex angle = 60, shape border rotate=#1]
+
+\tikzset{snake it/.style={decorate, decoration=snake}}
+
+\begin{tikzpicture}[auto, node distance=3cm,>=latex', text width=2.2cm, align=center]
+    \node [name=disturbance] {Atmospheric disturbance};
+    \draw[red, line width=1mm] 
+    (disturbance.south west) -- (disturbance.north east)
+    (disturbance.south east) -- (disturbance.north west);
+    \node [name=inspace, right of=disturbance, scale=2] {IN SPACE!};
+    \node [sum, below of=disturbance, node distance=2cm, text width=0.5cm] (dm) {+};
+    \node [draw, rectangle, below of=dm, node distance=2cm, minimum height=2em, minimum width=2em, text width=0.1cm, color=gray] (beamsplitter) {};
+    \node [input, below right=1em and 1em of beamsplitter.center, anchor=center] (beamsplitterbr) {};
+    \node [input, above left=1em and 1em of beamsplitter.center, anchor=center] (beamsplittertl) {};
+    \node [input, below of=beamsplitter, node distance=2cm] (turn) {};
+    \node [name=beamsplittertext, left of=beamsplitter, node distance=1.0cm] {Beam\\splitter};
+    \node [block, minimum height=5em] (dmblock) at (dm) {};
+    \node [above right=1.5em and 2em of dmblock.center, anchor=center] (dmtext) {DM};
+    \node [block, right of=turn] (pl) {Science image};
+    \node [block, right of=beamsplitter] (pywfs) {Wavefront sensor};
+    \node [block, right of=pywfs,] (pyrecon) {Wavefront reconstructor};
+    \node [input, right of=pyrecon, node distance=1.5cm] (pyswitch) {};
+    \node [input, above of=pyswitch, node distance=0.9cm] (turn4) {};
+    \node [input, right of=pyrecon, text width=0.5cm, node distance=2cm] (sum2) {};
+    \node [input, above of=sum2, node distance=2cm] (turn3) {};
+    \node [gain, left of=turn3, shape border rotate=-180, text width=0.8cm, node distance=1.5cm] (gain) {Gain};
+    \node [block, left of=gain, node distance=3cm] (integ) {Integrator};
+    \node [input, left of=turn, node distance=1.05cm] (wave) {};
+
+    \path[draw,->] (disturbance) -- (dm);
+    \path[draw,->] (dm) -- (beamsplitter.center);
+    \path[draw,-,color=gray] (beamsplittertl) -- (beamsplitterbr);
+    \path[draw,->] (beamsplitter.center) -- (pywfs);
+    \path[draw,->] (pywfs) -- (pyrecon);
+    \path[draw,-] (pyrecon) -- (sum2);
+    \path[draw,-] (beamsplitter.center) -- (turn);
+    \path[draw,->] (turn) -- (pl);
+    \path[draw,-] (sum2) -- (turn3);
+    \path[draw,->] (turn3) -- (gain);
+    \path[draw,->] (gain) -- (integ);
+    \path[draw,->] (integ) -- (dm) node[above, pos=0.95] {--};
+    \path[draw,->, snake it, color=red] (wave) -- (turn) node[left, pos=1.3, scale=2] {NCPA};
+\end{tikzpicture}
+\end{document}

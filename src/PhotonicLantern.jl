@@ -64,11 +64,11 @@ module PhotonicLantern
     end
     
     function im_show(x; kwargs...)
-        heatmap(nanify(x), aspect_ratio=1, showaxis=false, grid=false, xlim=(0, size(x, 1) + 2), c=:thermal; kwargs...)
+        heatmap(nanify(x), aspect_ratio=1, showaxis=false, grid=false, xlim=(0, size(x, 1) + 2), c=:RdBu; kwargs...)
     end
 
     function im_show!(x; kwargs...)
-        heatmap!(nanify(x), aspect_ratio=1, showaxis=false, grid=false, xlim=(0, size(x, 1) + 2), c=:thermal; kwargs...)
+        heatmap!(nanify(x), aspect_ratio=1, showaxis=false, grid=false, xlim=(0, size(x, 1) + 2), c=:RdBu; kwargs...)
     end
 
     function phasewrap(x)

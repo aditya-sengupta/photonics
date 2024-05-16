@@ -3,9 +3,6 @@ import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib import animation
 from IPython.display import HTML
-import hcipy as hc
-from hcipy import imshow_field
-from scipy.optimize import minimize
 from photonics.simulations.lantern_optics import LanternOptics
 from itertools import product, repeat
 from photonics import PROJECT_ROOT
