@@ -8,7 +8,7 @@ import hcipy as hc
 from hcipy import imshow_field
 from photonics import Optics, LanternOptics, make_command_matrix, imshow_psf
 from itertools import product, repeat
-from photonics import PROJECT_ROOT, zernike_names
+from photonics import PROJECT_ROOT, zernike_names, nanify
 from tqdm import tqdm
 # %%
 optics = Optics(lantern_fnumber=6.5)
@@ -103,41 +103,46 @@ plt.savefig(join(PROJECT_ROOT, "figures", f"linearity_fsweep_z{nzern}_3_5.png"),
 plt.show()
 # %%
 def psf_entrance_scanning(f_number):
-    lo.setup_hcipy(f_number=f_number)
-    norm_val = np.linalg.norm(lo.focal_wf_ref.intensity)
-    zvals = np.arange(1, 10)
-    amp_vals = np.arange(-1, 1.0001, 0.05)
-    input_psfs = [lo.zernike_to_focal(*k) for k in product(zvals, amp_vals)]
+    optics = Optics(lantern_fnumber=f_number)
+    lo.focal_propagator = optics.focal_propagator
+    norm_val = np.linalg.norm(optics.im_ref.intensity)
+    zvals = np.arange(10)
+    amp_vals = np.arange(-1, 1.0001, 0.1)
+    input_psfs = [optics.focal_propagator(optics.zernike_to_pupil(*k)) for k in product(zvals, amp_vals)]
     zvals_repeat = [list(repeat(z, len(amp_vals))) for z in zvals]
     amp_vals_repeat = list(repeat(amp_vals, len(zvals)))
     zvals = [x for xs in zvals_repeat for x in xs]
     amp_vals = [x for xs in amp_vals_repeat for x in xs]
-    scan = [
-        np.abs(lo.lantern_output(input_psf)[1]) ** 2
-        for input_psf in input_psfs
-    ]
     coeffs = [
         np.abs(lo.lantern_output(input_psf)[0]) ** 2
+        for input_psf in input_psfs
+    ]
+    scan = [
+        np.abs(lo.input_to_2d(lo.lantern_output(input_psf)[0] @ lo.outputs)) ** 2
         for input_psf in input_psfs
     ]
     max_coeff = np.max(np.max(coeffs))
     coeffs = [x / max_coeff for x in coeffs]
     lantern_image = np.abs(sum(c * lf for (c, lf) in zip(coeffs[0], lo.plotting_launch_fields))) ** (1/2)
-    fig = plt.figure(figsize=(10, 3))
+    fig = plt.figure(figsize=(9, 3))
     fig.subplots_adjust(top=0.8)
     plt.subplot(1, 3, 1)
+    ax = plt.gca()
+    ax.set_axis_off()
     im1 = plt.imshow(np.log10(input_psfs[0].intensity.shaped[lo.extent_x[0]:lo.extent_x[1],lo.extent_y[0]:lo.extent_y[1]] / norm_val), vmin=-2)
     plt.title("Input PSF")
     plt.subplot(1, 3, 2)
+    ax = plt.gca()
+    ax.set_axis_off()
     im2 = plt.imshow(scan[0])
-    plt.title("Projection onto lantern basis")
+    plt.title("What the lantern sees")
     plt.subplot(1, 3, 3)
-    # im3 = plt.bar(np.arange(19), coeffs[0])
-    # plt.ylim(0, 1)
+    ax = plt.gca()
+    ax.set_axis_off()
     im3 = plt.imshow(lantern_image)
-    plt.title("Projection coeffs/lantern outputs")
+    plt.title("Lantern output")
     def animate(t):
-        fig.suptitle(f"Zernike {zvals[t]}, amplitude {amp_vals[t]:.2f}, f/{lo.f_number} lantern projection", y=1)
+        fig.suptitle(f"{zernike_names[zvals[t]].title()}, amplitude {amp_vals[t]:.2f} rad, f/{lo.f_number} lantern projection", y=1)
         im1.set_data(np.log10(input_psfs[t].intensity.shaped[lo.extent_x[0]:lo.extent_x[1],lo.extent_y[0]:lo.extent_y[1]] / norm_val))
         im2.set_data(scan[t])
         im3.set_data(np.abs(sum(c * lf for (c, lf) in zip(coeffs[t], lo.plotting_launch_fields))) ** (1/2))
@@ -145,7 +150,7 @@ def psf_entrance_scanning(f_number):
     anim = animation.FuncAnimation(fig, animate, np.arange(len(scan)))
     plt.close(fig)
     HTML(anim.to_jshtml(default_mode='loop'))
-    anim.save(PROJECT_ROOT + f"/figures/psf_entrance_scanning_f{lo.f_number}.mp4")
+    anim.save(PROJECT_ROOT + f"/figures/psf_entrance_scanning_f{lo.f_number}.mp4", dpi=600)
     
 # %%
 psf_entrance_scanning(6.5)
@@ -155,14 +160,19 @@ for fv in [4, 6.5, 9]:
     lo.setup_hcipy(f_number=fv)
     linearity_array = linearity_arrays[idx]
     lo.show_linearity(amplitudes, linearity_array)
-# %%
-
 
 # %%
+plt.rc('font', family='serif',size=12)
+plt.rcParams.update({
+    "text.usetex": False,
+    "font.family": "serif",
+    "font.serif" : "cmr10",
+    "axes.formatter.use_mathtext" : True
+})
 fnumbers = np.arange(3.5, 12.1, 0.1)
 injected_idx = 4
-injected_amp = 0.5
-optics = Optics(lantern_fnumber=12.0)
+injected_amp = 0.4
+optics = Optics(lantern_fnumber=4.0)
 lantern_mask = np.array(np.ones_like(optics.im_ref.intensity.shaped)) * 1e-10
 lantern_mask[lo.input_footprint] = 1.0
 lo.focal_propagator = optics.focal_propagator
@@ -174,33 +184,39 @@ recovered_zernikes = lo.command_matrix.dot(lo.readout(injected_pupil) - lo.image
 optics.deformable_mirror.actuators[:nzern] = recovered_zernikes
 recovered_pupil = optics.deformable_mirror.forward(optics.wf)
 recovered_psf = optics.focal_propagator(recovered_pupil)
-fig, axs = plt.subplots(2, 2, figsize=(15, 5))
+fig, axs = plt.subplots(2, 2, figsize=(5,5), dpi=400)
+for axr in axs:
+    for ax in axr:
+        ax.axis('off')
+        # ax.set_xticks([])
+        # ax.set_yticks([])
 im0 = axs[0][0].imshow(
     np.log10(injected_psf.intensity.shaped / np.max(injected_psf.intensity))[219:293, 219:293],
-    vmin=-4
+    vmin=-4,
 )
-axs[0][0].set_xticks([])
-axs[0][0].set_yticks([])
 axs[0][0].set_title("Injected PSF")
 injected_to_plot = np.log10((injected_psf.intensity.shaped * lantern_mask) / np.max(injected_psf.intensity))[219:293, 219:293]
 im1 = axs[0][1].imshow(
     injected_to_plot,
     vmin=-4
 )
-axs[0][1].set_xticks([])
-axs[0][1].set_yticks([])
 axs[0][1].set_title("What the lantern sees")
 recovered = recovered_zernikes[injected_idx] / (optics.wl / (4 * np.pi))
 crosstalk = recovered_zernikes[2] / (optics.wl / (4 * np.pi))
-im2 = axs[1][0].scatter(recovered, crosstalk)
-axs[2].scatter([injected_amp], [0], c='k')
-axs[2].annotate("Target", [injected_amp, 0.05])
-axs[2].set_xlabel("Injected mode")
-axs[2].set_ylabel("Crosstalk")
-axs[2].set_xlim([injected_amp - 0.3, injected_amp + 0.3])
-axs[2].set_ylim([-1.0, 1.0])
+axs[1][0].set_title("Injected phase")
+im2 = axs[1][0].imshow(
+    injected_pupil.phase.shaped,
+    vmin=-np.pi/4, vmax=np.pi/4,
+    cmap="RdBu"
+)
+axs[1][1].set_title("Lantern measured phase")
+im3 = axs[1][1].imshow(
+    recovered_pupil.phase.shaped,
+    vmin=-np.pi/4, vmax=np.pi/4,
+    cmap="RdBu"
+)
 def animate(t):
-    fig.suptitle(f"Reconstruction at f/{fnumbers[t]:.1f}")
+    fig.suptitle(f"Photonic lantern reconstruction at f/{fnumbers[t]:.1f}")
     optics = Optics(lantern_fnumber=fnumbers[t])
     lo.focal_propagator = optics.focal_propagator
     make_command_matrix(optics.deformable_mirror, lo, optics.wf)
@@ -223,7 +239,9 @@ def animate(t):
     injected_to_plot = np.log10((injected_psf.intensity.shaped) / np.max(injected_psf.intensity))[imin_y:imax_y, imin_y:imax_y]
     injected_to_plot[np.where(lantern_aperture == 0.0)] = np.min(injected_to_plot)
     im1.set_data(injected_to_plot)
-    recovered = recovered_zernikes[injected_idx] / (optics.wl / (4 * np.pi))
+    im2.set_data(nanify(injected_pupil.phase, optics.aperture).shaped)
+    im3.set_data(nanify(recovered_pupil.phase, optics.aperture).shaped)
+    """recovered = recovered_zernikes[injected_idx] / (optics.wl / (4 * np.pi))
     crosstalk = recovered_zernikes[2] / (optics.wl / (4 * np.pi))
     axs[2].clear()
     axs[2].scatter(recovered, crosstalk)
@@ -233,13 +251,12 @@ def animate(t):
     axs[2].set_xlabel("Injected mode (rad)")
     axs[2].set_ylabel("Crosstalk (rad)")
     axs[2].set_xlim([injected_amp - 0.3, injected_amp + 0.3])
-    axs[2].set_ylim([-0.25, 0.25])
+    axs[2].set_ylim([-0.25, 0.25])"""
 # %%
 anim = animation.FuncAnimation(fig, animate, np.arange(len(fnumbers)))
 # %%
 HTML(anim.to_jshtml(default_mode='loop'))
 
-
 # %%
-anim.save(join(PROJECT_ROOT, "figures", "fnumber_zooming.mp4"), dpi=1000)
+anim.save(join(PROJECT_ROOT, "figures", "fnumber_zooming.mp4"), dpi=600)
 # %%
