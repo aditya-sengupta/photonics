@@ -1,22 +1,22 @@
 # %%
+from os.path import join
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib import animation
 from IPython.display import HTML
 import hcipy as hc
 from hcipy import imshow_field
-from scipy.optimize import minimize
-from photonics.simulations.lantern_optics import LanternOptics
+from photonics import Optics, LanternOptics, make_command_matrix, imshow_psf
 from itertools import product, repeat
-from photonics import PROJECT_ROOT
+from photonics import PROJECT_ROOT, zernike_names
 from tqdm import tqdm
 # %%
-lo = LanternOptics(f_number=10)
+optics = Optics(lantern_fnumber=6.5)
+lo = LanternOptics(optics)
+nzern = lo.nmodes
 # %%
-lo.setup_hcipy(f_number=6.5)
-# %%
-lo.make_command_matrix(nzern=9)
-amplitudes, linearity_responses = lo.make_linearity(nzern=9, lim=1.0, step=0.05)
+make_command_matrix(optics.deformable_mirror, lo, optics.wf)
+amplitudes, linearity_responses = lo.make_linearity(optics, lim=1.0, step=0.05)
 # %%
 lo.show_linearity(amplitudes, linearity_responses)
 # %%
@@ -26,13 +26,13 @@ def linearity_loss(amplitudes, linearity_responses):
 
 # %%
 linearity_loss(amplitudes, linearity_responses)
+
 # %%
-def fnumber_objective(f, nzern=9):
-    print(f)
-    lo.setup_hcipy(f_number=f)
-    lo.make_intcmd(nzern=nzern)
-    loss = linearity_loss(*lo.make_linearity(nzern=nzern, lim=0.5, step=0.1))
-    print(loss)
+def fnumber_objective(f):
+    optics = Optics(lantern_fnumber=f)
+    lo.focal_propagator = optics.focal_propagator
+    make_command_matrix(optics.deformable_mirror, lo, optics.wf)
+    loss = linearity_loss(*lo.make_linearity(optics, lim=0.5, step=0.1))
     return loss
 # %%
 def norm(a, b):
@@ -43,8 +43,9 @@ def corr(a, b):
 f_to_test = np.arange(0.1, 20.1, 0.1)
 corrs = []
 for f in tqdm(f_to_test):
-    lo.setup_hcipy(f_number=f)
-    psf_on_input = np.array(lo.focal_wf_ref.electric_field.shaped[lo.input_footprint])
+    optics = Optics(lantern_fnumber=f)
+    lo.focal_propagator = optics.focal_propagator
+    psf_on_input = np.array(optics.im_ref.electric_field.shaped[lo.input_footprint])
     projected = lo.outputs.T @ (lo.projector @ psf_on_input)
     corrs.append(corr(psf_on_input, projected))
 
@@ -56,34 +57,36 @@ plt.gca().invert_yaxis()
 plt.yticks([1e0, 1e-1, 1e-2, 1e-3], [1-1e0, 1-1e-1, 1-1e-2, 1-1e-3])
 plt.xlabel("f-number")
 plt.ylabel("Coupling efficiency")
-plt.savefig(PROJECT_ROOT + "/figures/coupling_efficiency.png", dpi=600)
+plt.savefig(join(PROJECT_ROOT, "figures", "coupling_efficiency.png", dpi=600))
 
 # %%
-f_shortlist = np.arange(3, 5.1, 0.1)
+f_shortlist = np.arange(3.0, 10.0, 0.1)
 # %%
-linearity_arrays = []
-linearity_loss_vals = []
+linearity_arrays = {}
+linearity_loss_vals = {}
 # %%
-for f in f_shortlist:
-    print(f)
-    lo.setup_hcipy(f_number=f)
-    lo.make_intcmd(nzern=18)
-    amplitudes, linearity_arr = lo.make_linearity(nzern=18, lim=0.5, step=0.1)
-    linearity_arrays.append(linearity_arr)
-    linearity_loss_vals.append(linearity_loss(amplitudes, linearity_arr))
+for f in tqdm(f_shortlist):
+    optics = Optics(lantern_fnumber=f)
+    lo.focal_propagator = optics.focal_propagator
+    make_command_matrix(optics.deformable_mirror, lo, optics.wf)
+    amplitudes, linearity_arr = lo.make_linearity(optics, lim=0.5, step=0.1)
+    loss = linearity_loss(amplitudes, linearity_arr)
+    linearity_arrays[f] = linearity_arr
+    linearity_loss_vals[f] = linearity_loss(amplitudes, linearity_arr)
     
 # %%
-plt.semilogy(f_shortlist, linearity_loss_vals)
+linearity_losses_list = [v for (_, v) in sorted(linearity_loss_vals.items())]
+optimal_f = min(linearity_loss_vals, key=linearity_loss_vals.get)
+plt.semilogy(f_shortlist, linearity_losses_list)
 plt.xlabel("f-number")
 plt.ylabel("Linearity loss value")
-plt.title(f"The optimal f-number is {f_shortlist[np.argmin(linearity_loss_vals)]:.1f}")
-plt.savefig(PROJECT_ROOT + "/figures/optimal_f.png", dpi=600)
+plt.title(f"The optimal f-number is {optimal_f:.1f}")
+plt.savefig(join(PROJECT_ROOT, "figures", "optimal_f.png"), dpi=600)
 # %%
-nzern = 18 # linearity_arrays[0].shape[0]
-fig, axs = plt.subplots(int(np.ceil(nzern // 3)), 3, sharex=True, sharey=True, figsize=(9, 18))
+fig, axs = plt.subplots(int(np.ceil(nzern // 3)), 3, sharex=True, sharey=True, figsize=(9, 9))
 plt.suptitle("Photonic lantern linearity curves (rad)")
-linearity_arrays_cr = np.array(linearity_arrays)[np.argsort(f_shortlist)]
-f_to_test_cr = np.sort(f_shortlist)
+linearity_arrays_cr = [v for (_, v) in sorted(linearity_arrays.items())]
+f_to_test_cr = sorted(linearity_arrays.keys())
 def rescaled(x, s):
     return ((x - np.min(x)) / (np.max(x) - np.min(x))) * s + (1 - s) / 2
 
@@ -91,14 +94,13 @@ for i in range(nzern):
     r, c = i // 3, i % 3
     axs[r][c].set_prop_cycle(plt.cycler('color', plt.cm.magma(rescaled(f_to_test_cr, 0.6))))
     axs[r][c].set_ylim([min(amplitudes), max(amplitudes)])
-    axs[r][c].title.set_text(f"Z{i+1}")
+    axs[r][c].title.set_text(zernike_names[i])
     axs[r][c].plot(amplitudes, amplitudes, '--k')
     for (j,f) in enumerate(f_to_test_cr):
-        axs[r][c].plot(amplitudes, linearity_arrays_cr[j][i,:,i], label=(f"f={f:.1f}" if j % 1 == 0 else None))
+        axs[r][c].plot(amplitudes, linearity_arrays_cr[j][i,:,i], label=(f"f={f:.1f}" if j % 10 == 0 else None), alpha=0.4)
 plt.legend(bbox_to_anchor=(1.04, 0.8), loc="lower left")
-plt.savefig(PROJECT_ROOT + f"/figures/linearity_fsweep_z{nzern}_3_5.png", dpi=600)
+plt.savefig(join(PROJECT_ROOT, "figures", f"linearity_fsweep_z{nzern}_3_5.png"), dpi=600)
 plt.show()
-
 # %%
 def psf_entrance_scanning(f_number):
     lo.setup_hcipy(f_number=f_number)
@@ -153,4 +155,91 @@ for fv in [4, 6.5, 9]:
     lo.setup_hcipy(f_number=fv)
     linearity_array = linearity_arrays[idx]
     lo.show_linearity(amplitudes, linearity_array)
+# %%
+
+
+# %%
+fnumbers = np.arange(3.5, 12.1, 0.1)
+injected_idx = 4
+injected_amp = 0.5
+optics = Optics(lantern_fnumber=12.0)
+lantern_mask = np.array(np.ones_like(optics.im_ref.intensity.shaped)) * 1e-10
+lantern_mask[lo.input_footprint] = 1.0
+lo.focal_propagator = optics.focal_propagator
+optics.deformable_mirror.flatten()
+optics.deformable_mirror.actuators[injected_idx] = injected_amp * optics.wl / (4 * np.pi)
+injected_pupil = optics.deformable_mirror.forward(optics.wf)
+injected_psf = optics.focal_propagator(injected_pupil)
+recovered_zernikes = lo.command_matrix.dot(lo.readout(injected_pupil) - lo.image_ref)
+optics.deformable_mirror.actuators[:nzern] = recovered_zernikes
+recovered_pupil = optics.deformable_mirror.forward(optics.wf)
+recovered_psf = optics.focal_propagator(recovered_pupil)
+fig, axs = plt.subplots(2, 2, figsize=(15, 5))
+im0 = axs[0][0].imshow(
+    np.log10(injected_psf.intensity.shaped / np.max(injected_psf.intensity))[219:293, 219:293],
+    vmin=-4
+)
+axs[0][0].set_xticks([])
+axs[0][0].set_yticks([])
+axs[0][0].set_title("Injected PSF")
+injected_to_plot = np.log10((injected_psf.intensity.shaped * lantern_mask) / np.max(injected_psf.intensity))[219:293, 219:293]
+im1 = axs[0][1].imshow(
+    injected_to_plot,
+    vmin=-4
+)
+axs[0][1].set_xticks([])
+axs[0][1].set_yticks([])
+axs[0][1].set_title("What the lantern sees")
+recovered = recovered_zernikes[injected_idx] / (optics.wl / (4 * np.pi))
+crosstalk = recovered_zernikes[2] / (optics.wl / (4 * np.pi))
+im2 = axs[1][0].scatter(recovered, crosstalk)
+axs[2].scatter([injected_amp], [0], c='k')
+axs[2].annotate("Target", [injected_amp, 0.05])
+axs[2].set_xlabel("Injected mode")
+axs[2].set_ylabel("Crosstalk")
+axs[2].set_xlim([injected_amp - 0.3, injected_amp + 0.3])
+axs[2].set_ylim([-1.0, 1.0])
+def animate(t):
+    fig.suptitle(f"Reconstruction at f/{fnumbers[t]:.1f}")
+    optics = Optics(lantern_fnumber=fnumbers[t])
+    lo.focal_propagator = optics.focal_propagator
+    make_command_matrix(optics.deformable_mirror, lo, optics.wf)
+    optics.deformable_mirror.flatten()
+    optics.deformable_mirror.actuators[injected_idx] = injected_amp * optics.wl / (4 * np.pi)
+    injected_pupil = optics.deformable_mirror.forward(optics.wf)
+    injected_psf = optics.focal_propagator(injected_pupil)
+    recovered_zernikes = lo.command_matrix.dot(lo.readout(injected_pupil) - lo.image_ref)
+    optics.deformable_mirror.actuators[:nzern] = recovered_zernikes
+    recovered_pupil = optics.deformable_mirror.forward(optics.wf)
+    r = np.array(injected_psf.intensity.shaped)
+    central_idx = np.unravel_index(np.argmax(np.array(r)), r.shape)
+    imin_x, imax_x = central_idx[1] - 37, central_idx[1] + 37
+    imin_y, imax_y = central_idx[0] - 37, central_idx[0] + 37
+    cropped_grid = np.indices((imax_y - imin_y, imax_x - imin_x))
+    cropped_cen_y, cropped_cen_x = (imax_y - imin_y) // 2, (imax_x - imin_x) // 2
+    lantern_aperture = np.zeros((imax_y - imin_y, imax_x - imin_x))
+    lantern_aperture[(cropped_grid[0] - cropped_cen_y) ** 2 + (cropped_grid[1] - cropped_cen_x) ** 2 <= (cropped_cen_y - 20) ** 2] = 1.0
+    im0.set_data(np.log10(injected_psf.intensity.shaped / np.max(injected_psf.intensity))[imin_y:imax_y, imin_x:imax_x])
+    injected_to_plot = np.log10((injected_psf.intensity.shaped) / np.max(injected_psf.intensity))[imin_y:imax_y, imin_y:imax_y]
+    injected_to_plot[np.where(lantern_aperture == 0.0)] = np.min(injected_to_plot)
+    im1.set_data(injected_to_plot)
+    recovered = recovered_zernikes[injected_idx] / (optics.wl / (4 * np.pi))
+    crosstalk = recovered_zernikes[2] / (optics.wl / (4 * np.pi))
+    axs[2].clear()
+    axs[2].scatter(recovered, crosstalk)
+    axs[2].scatter([0.5], [0], c='k')
+    axs[2].annotate("Target", [0.5, 0.01])
+    axs[2].annotate("Recovered", [recovered + 0.01, crosstalk + 0.01])
+    axs[2].set_xlabel("Injected mode (rad)")
+    axs[2].set_ylabel("Crosstalk (rad)")
+    axs[2].set_xlim([injected_amp - 0.3, injected_amp + 0.3])
+    axs[2].set_ylim([-0.25, 0.25])
+# %%
+anim = animation.FuncAnimation(fig, animate, np.arange(len(fnumbers)))
+# %%
+HTML(anim.to_jshtml(default_mode='loop'))
+
+
+# %%
+anim.save(join(PROJECT_ROOT, "figures", "fnumber_zooming.mp4"), dpi=1000)
 # %%
