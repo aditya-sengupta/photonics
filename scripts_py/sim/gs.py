@@ -1,4 +1,5 @@
 # %%
+from IPython import get_ipython
 from photonics.simulations.lantern_optics import LanternOptics
 from photonics.simulations.optics import Optics
 from hcipy import imshow_field
@@ -7,6 +8,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 from tqdm import trange
 
+get_ipython().run_line_magic("load_ext", "autoreload")
+get_ipython().run_line_magic("autoreload", "2")
 # %%
 optics = Optics(lantern_fnumber=6.5)
 lo = LanternOptics(optics)
@@ -54,7 +57,7 @@ zdecomps = np.array(zdecomps).T
 plt.hlines(a_applied, 0, zdecomps.shape[1] - 1, label="Target")
 for (i, r) in enumerate(zdecomps):
     if i == z_applied:
-        plt.plot(r, alpha=1, label="Injected mode", color="k")
+        plt.plot(r, label="Injected mode", color="k")
     else:
         plt.plot(r, alpha=0.1, color="r")
 plt.xticks(np.arange(0, zdecomps.shape[1], 4))
@@ -62,3 +65,5 @@ plt.xlabel("Gerchberg-Saxton iteration")
 plt.ylabel("Amplitude (rad)")
 plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
 plt.subplots_adjust(right=0.8)
+
+# %%
