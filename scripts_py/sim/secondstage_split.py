@@ -15,13 +15,13 @@ from photonics import Optics, PyramidOptics, LanternOptics, correction
 # %%
 n_filter = 9
 f_cutoff = 30
-f_loop = 100
+f_loop = 800
 dt = 1/f_loop
 optics = Optics(lantern_fnumber=6.5, dm_basis="modal")
 pyramid = PyramidOptics(optics)
 lantern = LanternOptics(optics)
-optics.turbulence_setup(fried_parameter=0.5, seed=10)
-corr = partial(correction, optics=optics, pyramid=pyramid, lantern=lantern)
+optics.turbulence_setup(fried_parameter=0.1, seed=10)
+corr = partial(correction, optics=optics, pyramid=pyramid, lantern=lantern, f_loop=f_loop)
 focus_ncpa = optics.zernike_to_pupil(2, 0.3)
 # %%
 open_loop = corr(use_lantern=False, use_pyramid=False, ncpa=focus_ncpa)

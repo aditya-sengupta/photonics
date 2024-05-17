@@ -14,7 +14,7 @@ class PyramidOptics:
         pwfs = hc.PyramidWavefrontSensorOptics(optics.pupil_grid, pwfs_grid, separation=optics.telescope_diameter, wavelength_0=optics.wl)
         self.mpwfs = hc.ModulatedPyramidWavefrontSensorOptics(pwfs,modradius,self.modsteps)
         self.wfs_camera = hc.NoiselessDetector(pwfs_grid)
-        make_command_matrix(optics, self, optics.wf, dm_basis=optics.dm_basis)
+        make_command_matrix(optics.deformable_mirror, self, optics.wf, dm_basis=optics.dm_basis)
 
     def readout(self, wf):
         wf_mpwfs = self.mpwfs(wf)

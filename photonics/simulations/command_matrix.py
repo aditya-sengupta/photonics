@@ -10,7 +10,7 @@ def make_command_matrix(
     flat_wavefront: hc.Wavefront,
     probe_amp=1e-10,
     dm_basis="modal",
-    rerun=False
+    rerun=True
 ):
     """
     Make a command matrix for a DM-WFS pair and assigns it to wfs.command_matrix

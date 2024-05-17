@@ -57,8 +57,8 @@ def nanify(phase_screen, aperture=None):
     x[np.where(aperture == 0)] = np.nan
     return Field(x, phase_screen.grid)
 
-def imshow_psf(f: Field):
-    imshow_field(np.log10(f), vmin=-5)
+def imshow_psf(f: Field, **kwargs):
+    imshow_field(np.log10(f / np.max(f)), **kwargs)
 
 def peak_to_valley(x):
     return np.max(x) - np.min(x)
