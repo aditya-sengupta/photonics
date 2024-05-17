@@ -49,7 +49,9 @@ def angles_relative_to_center(x, y):
 def lmap(f, x):
     return list(map(f, x))
 
-def nanify(phase_screen, aperture):
+def nanify(phase_screen, aperture=None):
+    if aperture is None:
+        aperture = phase_screen
     x = copy(phase_screen)
     x = x - np.mean(x)
     x[np.where(aperture == 0)] = np.nan
@@ -60,3 +62,9 @@ def imshow_psf(f: Field, **kwargs):
 
 def peak_to_valley(x):
     return np.max(x) - np.min(x)
+
+def norm(a, b):
+    return np.sum(a * np.conj(b))
+
+def corr(a, b):
+    return np.abs(norm(a, b)) / np.sqrt(norm(a, a) * norm(b, b))
