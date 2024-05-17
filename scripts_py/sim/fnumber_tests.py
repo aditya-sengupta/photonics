@@ -4,9 +4,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib import animation
 from IPython.display import HTML
-import hcipy as hc
-from hcipy import imshow_field
-from photonics import Optics, LanternOptics, make_command_matrix, imshow_psf
+from photonics import Optics, LanternOptics, make_command_matrix
 from itertools import product, repeat
 from photonics import PROJECT_ROOT, zernike_names, nanify
 from tqdm import tqdm

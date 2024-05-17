@@ -1,11 +1,17 @@
 # %%
+from IPython import get_ipython
+get_ipython().run_line_magic("load_ext", "autoreload")
+get_ipython().run_line_magic("autoreload", "2")
+
+# %%
 from photonics.simulations.lantern_optics import LanternOptics
 from photonics.simulations.optics import Optics
 from hcipy import imshow_field
-from photonics.utils import nanify
+from photonics.utils import nanify, zernike_names
+from photonics.linearity import plot_linearity
 import numpy as np
 from matplotlib import pyplot as plt
-from tqdm import trange
+from tqdm import trange, tqdm
 
 # %%
 optics = Optics(lantern_fnumber=6.5)
@@ -19,7 +25,7 @@ gs_ret = lo.GS(
         optics,
         optics.zernike_to_pupil(3, 0.1)
     ).intensity,
-    niter=20
+    niter=4
 )
 # %%
 optics.zernike_basis.coefficients_for(optics.zernike_to_pupil(3, 0.1).phase)[:lo.nmodes]
@@ -62,3 +68,24 @@ plt.xlabel("Gerchberg-Saxton iteration")
 plt.ylabel("Amplitude (rad)")
 plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
 plt.subplots_adjust(right=0.8)
+
+# %%
+zr = np.arange(9)
+ar = np.arange(-1.0, 1.01, 0.1)
+sweep = np.zeros((len(zr), len(ar), len(zr)))
+for (i, z) in enumerate(zr):
+    print(zernike_names[i])
+    for (j, a) in enumerate(tqdm(ar)):
+        EM_in = lo.GS(
+            optics,
+            lo.forward(
+                optics,
+                optics.zernike_to_pupil(z, a)
+            ).intensity
+        )
+        retrieved_zernikes = optics.zernike_basis.coefficients_for(EM_in.phase)[:len(zr)]
+        sweep[i,j,:] = retrieved_zernikes
+        
+# %%
+plot_linearity(ar, sweep, "Gerchberg-Saxton")
+# %%

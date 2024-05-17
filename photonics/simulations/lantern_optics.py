@@ -225,8 +225,7 @@ class LanternOptics:
 		Gerchberg-Saxton algorithm
 		"""
 		EM_in, measuredAmplitude_in, measuredAmplitude_out = self.GS_init(optics, img)
-		print(EM_in)
-		for _ in trange(niter):
+		for _ in range(niter):
 			EM_in = self.GS_iteration(optics, EM_in, measuredAmplitude_in, measuredAmplitude_out)
 			
 		return EM_in

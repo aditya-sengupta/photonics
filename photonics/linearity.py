@@ -3,6 +3,7 @@
 import numpy as np
 from matplotlib import pyplot as plt
 from tqdm import trange
+from photonics.utils import zernike_names
 
 def interpolate_weights(arr: np.ndarray, x: float):
 	"""
@@ -81,7 +82,7 @@ def make_linearity(amplitudes, mode_sweep, cm):
 def plot_linearity(amplitudes, responses, title_mod="", zlabels=None):
 	nzern = responses.shape[0]
 	if zlabels is None:
-		zlabels = [f"Z{i+1}" for i in range(nzern)]
+		zlabels = [zernike_names[i].title() for i in range(nzern)]
 	nrow = 3
 	ncol = int(np.ceil(nzern / 3))
 	fig, axs = plt.subplots(ncol, nrow, sharex=True, sharey=True, figsize=(3 * nrow, 3 * ncol))
