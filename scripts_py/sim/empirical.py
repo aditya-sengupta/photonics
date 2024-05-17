@@ -18,7 +18,9 @@ lo = LanternOptics(optics)
 N = lo.nports
 # %%
 a = 0.01
-zerns_and_amps_for_input = [(0, 0.0)] + [(i, a) for i in range(18)]
+K = 346
+# %%
+zerns_and_amps_for_input = [(i, a) for i in range(K)]
 input_wavefronts = [optics.focal_propagator(optics.zernike_to_pupil(z, a)) for (z, a) in zerns_and_amps_for_input]
 input_basis_fields = [w.electric_field.shaped for w in input_wavefronts]
 
@@ -34,9 +36,9 @@ print(np.linalg.matrix_rank(
 # %%
 lantern_basis_fields = ModeBasis(lo.outputs.T)
 # %%
-A = np.zeros((lo.nports, lo.nports), dtype=np.complex128)
-A2obs = np.zeros((lo.nports, lo.nports), dtype=np.complex128)
-for i in range(19):
+A = np.zeros((lo.nports, 346), dtype=np.complex128)
+A2obs = np.zeros((lo.nports, 346), dtype=np.complex128)
+for i in range(346):
     A[:,i] = lantern_basis_fields.coefficients_for(lo.sanitize_output(input_basis_fields[i]))
     A2obs[:,i] = np.abs(lantern_basis_fields.coefficients_for(lo.sanitize_output(input_basis_fields[i]))) ** 2
 # %%
@@ -54,7 +56,7 @@ This is the same thing if A is full-rank, which I've confirmed it is. I can't co
 # make (N-1 choose 2) queries
 
 queries = []
-for i in trange((N-1)*(N-2)//2):
+for i in trange((K-1)*(K-2)//2):
     z = np.random.randn(N)
     focal_image = optics.focal_propagator(optics.zernike_to_pupil(np.arange(N), z))
     queries.append(focal_image)
