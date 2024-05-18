@@ -5,7 +5,7 @@ import numpy as np
 import hcipy as hc
 
 class Optics:
-	def __init__(self, lantern_fnumber=6.5, dm_basis="modal"):
+	def __init__(self, lantern_fnumber=6.5, dm_basis="modal", num_pupil_px=60):
 		self.dm_basis = dm_basis
 		self.lantern_fnumber = lantern_fnumber
 		self.mesh_extent = 512 # microns
@@ -13,7 +13,7 @@ class Optics:
 		self.telescope_diameter = 1
 		self.wl = 1.55e-6
 		self.k = 2 * np.pi / self.wl
-		self.pupil_grid = hc.make_pupil_grid(60, self.telescope_diameter)
+		self.pupil_grid = hc.make_pupil_grid(num_pupil_px, self.telescope_diameter)
 		self.aperture = hc.evaluate_supersampled(hc.make_circular_aperture(self.telescope_diameter), self.pupil_grid, 6)
 		spatial_resolution = self.wl * 1e-6 * self.lantern_fnumber # m/m = fraction
 		q = spatial_resolution / self.mesh_spacing / 1e-6
