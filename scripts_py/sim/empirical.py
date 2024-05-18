@@ -1,9 +1,10 @@
 # %%
 from IPython import get_ipython
+from photonics.simulations.command_matrix import make_command_matrix
 from photonics.simulations.lantern_optics import LanternOptics
 from photonics.simulations.optics import Optics
 from hcipy import imshow_field, ModeBasis
-from photonics.utils import nanify, lmap, norm, corr, rms
+from photonics.utils import nanify, lmap, rms
 import numpy as np
 import hcipy as hc
 from matplotlib import pyplot as plt
@@ -16,6 +17,16 @@ get_ipython().run_line_magic("autoreload", "2")
 optics = Optics(lantern_fnumber=6.5)
 lo = LanternOptics(optics)
 N = lo.nports
+lo.nmodes = 18
+make_command_matrix(optics.deformable_mirror, lo, optics.wf)
+# %%
+u, s, vh = np.linalg.svd(lo.interaction_matrix)
+# %%
+coeff_array = np.zeros(len(optics.zernike_basis))
+for row in vh:
+    coeff_array[:len(row)] = row
+    imshow_field(optics.zernike_basis.linear_combination(coeff_array))
+    plt.show()
 # %%
 a = 0.01
 K = 346
@@ -36,9 +47,9 @@ print(np.linalg.matrix_rank(
 # %%
 lantern_basis_fields = ModeBasis(lo.outputs.T)
 # %%
-A = np.zeros((lo.nports, 346), dtype=np.complex128)
-A2obs = np.zeros((lo.nports, 346), dtype=np.complex128)
-for i in range(346):
+A = np.zeros((lo.nports, K), dtype=np.complex128)
+A2obs = np.zeros((lo.nports, K), dtype=np.complex128)
+for i in range(K):
     A[:,i] = lantern_basis_fields.coefficients_for(lo.sanitize_output(input_basis_fields[i]))
     A2obs[:,i] = np.abs(lantern_basis_fields.coefficients_for(lo.sanitize_output(input_basis_fields[i]))) ** 2
 # %%

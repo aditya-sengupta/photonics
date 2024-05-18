@@ -37,5 +37,6 @@ def make_command_matrix(
             slopes.append(slope)
 
         slopes = hc.ModeBasis(slopes)
+        wfs.interaction_matrix = slopes.transformation_matrix
         wfs.command_matrix = hc.inverse_tikhonov(slopes.transformation_matrix, rcond=1e-3, svd=None)
         np.save(cmd_path, wfs.command_matrix)
