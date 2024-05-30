@@ -4,7 +4,6 @@ import hcipy as hc
 import lightbeam as lb
 from hcipy import imshow_field
 from matplotlib import pyplot as plt
-from tqdm import trange
 from ..utils import PROJECT_ROOT, date_now, zernike_names, nanify
 from .command_matrix import make_command_matrix
 
