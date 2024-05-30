@@ -4,7 +4,6 @@ get_ipython().run_line_magic("load_ext", "autoreload")
 get_ipython().run_line_magic("autoreload", "2")
 
 # %%
-from IPython import get_ipython
 from photonics.simulations.lantern_optics import LanternOptics
 from photonics.simulations.optics import Optics
 from hcipy import imshow_field
@@ -13,14 +12,15 @@ from photonics.linearity import plot_linearity
 import numpy as np
 from matplotlib import pyplot as plt
 from tqdm import trange, tqdm
-
-get_ipython().run_line_magic("load_ext", "autoreload")
-get_ipython().run_line_magic("autoreload", "2")
 # %%
 optics = Optics(lantern_fnumber=6.5)
 lo = LanternOptics(optics)
 # %%
-lo.show_GS(optics, 3, 0.5, niter=10)
+z, a = 16, -0.5
+input_phase = optics.zernike_to_phase(z, a)
+input_pupil = optics.phase_to_pupil(input_phase)
+guess_pupil = optics.phase_to_pupil(optics.zernike_to_phase(z, a))
+lo.show_GS(optics, z, a, guess=guess_pupil, niter=200)
 # %%
 gs_ret = lo.GS(
     optics,
@@ -73,10 +73,8 @@ plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
 plt.subplots_adjust(right=0.8)
 
 # %%
-
-# %%
-zr = np.arange(9)
-ar = np.arange(-1.0, 1.01, 0.1)
+zr = np.arange(18)
+ar = np.arange(-1.0, 1.01, 0.2)
 sweep = np.zeros((len(zr), len(ar), len(zr)))
 for (i, z) in enumerate(zr):
     print(zernike_names[i])
@@ -94,3 +92,4 @@ for (i, z) in enumerate(zr):
 # %%
 plot_linearity(ar, sweep, "Gerchberg-Saxton")
 # %%
+# Gerchberg Saxton error reduction

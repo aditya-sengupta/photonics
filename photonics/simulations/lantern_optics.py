@@ -45,16 +45,20 @@ class LanternOptics:
 		self.lantern_reverse = np.linalg.inv(self.lantern_basis.T @ self.lantern_basis) @ self.lantern_basis.T
 		out = np.zeros_like(self.xg)
 		self.lant.set_IORsq(out, self.z_ex)
-		out = out[self.mesh.PML:-self.mesh.PML,self.mesh.PML:-self.mesh.PML]
-		self.input_footprint = np.where(out >= self.nclad ** 2)
+		# out = out[self.mesh.PML:-self.mesh.PML,self.mesh.PML:-self.mesh.PML]
+		self.input_footprint = np.where(out[self.mesh.PML:-self.mesh.PML,self.mesh.PML:-self.mesh.PML] >= self.nclad ** 2)
+		self.complement_mask = np.ones_like(out, dtype=bool)
+		for (i, j) in zip(self.input_footprint[0], self.input_footprint[1]):
+			self.complement_mask[i,j] = False
 		self.extent_x = (np.min(self.input_footprint[0]), np.max(self.input_footprint[0]))
 		self.extent_y = (np.min(self.input_footprint[1]), np.max(self.input_footprint[1]))
 		self.load_outputs()
 		self.focal_propagator = optics.focal_propagator
 		self.focal_grid = optics.focal_grid
+		self.input_ref = optics.im_ref
 		make_command_matrix(optics.deformable_mirror, self, optics.wf, rerun=True)
 
-	def input_to_2d(self, input_efield, zoomed=True):
+	def input_to_2d(self, input_efield, zoomed=True, restore_outside=False):
 		"""
 		Takes in an input electric field as a 1D array (coordinates represented by input_footprint) and fills it in to a 2D grid for plotting.
 		
@@ -66,9 +70,11 @@ class LanternOptics:
 		else:
 			xl, yl = self.focal_grid.shape
 			xm, ym = 0, 0
-			
+		
 		input_efield_2d = np.zeros((xl, yl), dtype=np.complex64)
 		input_efield_2d[self.input_footprint[0] - xm, self.input_footprint[1] - ym] = input_efield
+		if restore_outside and not zoomed:
+			input_efield_2d[self.complement_mask] = self.input_ref.electric_field.shaped[self.complement_mask]
 		return input_efield_2d
 		
 	def make_mesh(self, mesh_extent, mesh_spacing):
@@ -122,6 +128,11 @@ class LanternOptics:
 		# projected = self.input_to_2d(coeffs @ self.outputs)
 		lantern_reading = sum(c * lf for (c, lf) in zip(coeffs, self.launch_fields))
 		return coeffs, lantern_reading
+
+	def plotting_lantern_output(self, focal_field):
+		coeffs = self.lantern_coeffs(focal_field)
+		lantern_reading = sum(c * lf for (c, lf) in zip(coeffs, self.plotting_launch_fields))
+		return lantern_reading
 
 	def readout(self, wf):
 		return np.abs(
@@ -182,14 +193,14 @@ class LanternOptics:
 		_, reading = self.lantern_output(focal)
 		return hc.Wavefront(hc.Field(reading.ravel(), optics.focal_grid), wavelength=self.wl)
 	
-	def backward(self, optics, reading):
+	def backward(self, optics, reading, restore_outside=False):
 		coeffs = self.lantern_reverse @ reading.electric_field
-		lantern_input = self.input_to_2d(coeffs @ self.outputs, zoomed=False)
+		lantern_input = self.input_to_2d(coeffs @ self.outputs, zoomed=False, restore_outside=restore_outside)
 		focal_wf = hc.Wavefront(hc.Field(lantern_input.ravel(), self.focal_grid), wavelength=self.wl)
 		pupil_field = self.focal_propagator.backward(focal_wf)
 		return pupil_field
 
-	def GS_init(self, optics, img):
+	def GS_init(self, optics, img, guess=None, restore_outside=False):
 		# Normalization
 		img /= img.sum()
 		
@@ -202,11 +213,14 @@ class LanternOptics:
 		# replacing by known amplitude
 		phase_out_0 = EM_out.phase
 		EM_out = measuredAmplitude_out * np.exp(1j*phase_out_0)
-		# Back Propagation in PWFS
-		EM_in = self.backward(optics, hc.Wavefront(EM_out, wavelength=self.wl))
+		# Back Propagation in PL
+		if guess is None:
+			EM_in = self.backward(optics, hc.Wavefront(EM_out, wavelength=self.wl), restore_outside=restore_outside)
+		else:
+			EM_in = guess
 		return EM_in, measuredAmplitude_in, measuredAmplitude_out
 
-	def GS_iteration(self, optics, EM_in, measuredAmplitude_in, measuredAmplitude_out):
+	def GS_iteration(self, optics, EM_in, measuredAmplitude_in, measuredAmplitude_out, restore_outside=False):
 		# replacing by known amplitude
 		phase_in_k = EM_in.phase
 		EM_in = hc.Wavefront(measuredAmplitude_in.electric_field*np.exp(1j*phase_in_k),wavelength=self.wl)
@@ -216,42 +230,42 @@ class LanternOptics:
 		phase_out_k = EM_out.phase
 		EM_out = hc.Wavefront(measuredAmplitude_out*np.exp(1j*phase_out_k), wavelength=self.wl)
 		# Lantern backward propagation    
-		EM_in = self.backward(optics, EM_out)
+		EM_in = self.backward(optics, EM_out, restore_outside=restore_outside)
 			
 		return EM_in
 
-	def GS(self, optics, img, niter=10):
+	def GS(self, optics, img, guess=None, niter=10):
 		"""
 		Gerchberg-Saxton algorithm
 		"""
-		EM_in, measuredAmplitude_in, measuredAmplitude_out = self.GS_init(optics, img)
+		EM_in, measuredAmplitude_in, measuredAmplitude_out = self.GS_init(optics, img, guess)
 		for _ in range(niter):
 			EM_in = self.GS_iteration(optics, EM_in, measuredAmplitude_in, measuredAmplitude_out)
 			
 		return EM_in
 	
-	def show_GS(self, optics, zernike, amplitude, niter=10):
+	def show_GS(self, optics, zernike, amplitude, guess=None, niter=10):
 		input_phase = optics.zernike_to_phase(zernike, amplitude)
 		input_pupil = optics.phase_to_pupil(input_phase)
 		reading = self.forward(optics, input_pupil)
 		input_focal = self.focal_propagator.forward(input_pupil)
 		coeffs = self.lantern_coeffs(input_focal)
 		out_to_plot = np.abs(sum(c * lf for (c, lf) in zip(coeffs, self.plotting_launch_fields))) ** 2
-		retrieved = self.GS(optics, reading.intensity, niter=niter)
-		retphase = retrieved.phase # (retrieved.phase % np.pi) - np.pi / 2
+		retrieved = self.GS(optics, reading.intensity, guess=guess, niter=niter)
+		retphase = (retrieved.phase % np.pi) - np.pi / 2
 		fig, axs = plt.subplots(1, 3)
 		fig.suptitle(f"Lantern phase retrieval, Zernike {zernike}, amplitude {amplitude}")
 		fig.subplots_adjust(top=1.4, bottom=0.0)
 		for ax in axs:
 			ax.set_xticks([])
 			ax.set_yticks([])
-		# vmin = np.minimum(np.min(input_phase), np.min(retphase))
-		# vmax = np.maximum(np.max(input_phase), np.max(retphase))
-		axs[0].imshow(nanify(input_phase.shaped, optics.aperture.shaped), cmap="RdBu")
+		vmin = np.minimum(np.min(input_phase), np.min(retphase))
+		vmax = np.maximum(np.max(input_phase), np.max(retphase))
+		axs[0].imshow(nanify(input_phase.shaped, optics.aperture.shaped), cmap="RdBu", vmin=vmin, vmax=vmax)
 		axs[0].set_title("Phase screen")
 		axs[1].imshow(out_to_plot)
 		axs[1].set_title("Lantern output")
-		axs[2].imshow(nanify(retphase.shaped, optics.aperture.shaped), cmap="RdBu")
+		axs[2].imshow(nanify(retphase.shaped, optics.aperture.shaped), cmap="RdBu", vmin=vmin, vmax=vmax)
 		axs[2].set_title("Retrieved phase")
 		plt.show()
   
