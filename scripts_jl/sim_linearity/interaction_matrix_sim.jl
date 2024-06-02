@@ -2,13 +2,17 @@ using NPZ
 using Plots
 using PhotonicLantern
 
-# cd("photonics")
+pgfplotsx()
+
+plot_font = "Computer Modern"
+default(fontfamily=plot_font,
+        linewidth=2, framestyle=:box, label=nothing, grid=false)
 
 amps = npzread("data/sweep_testset_amplitudes_.npy")
 p_i_all = npzread("data/sweep_testset_lanterns.npy") .|> abs2
 
 command_matrix = make_command_matrix(amps, p_i_all, push_ref=0.05, nmodes=18)
-plot_linearity(amps, p_i_all, command_matrix)
+# plot_linearity(amps, p_i_all, command_matrix)
 
 push_ref = 0.05
 l, r = argmin(abs.(amps .+ push_ref)), argmin(abs.(amps .- push_ref))
@@ -26,6 +30,8 @@ A = z \ p
 iA = p \ z
 resid = p - z * A
 
+mode_names = ["x-tilt", "y-tilt", "astig", "focus", "astig45", "tricoma", "tricoma60", "coma", "coma90", "z10", "z11", "z12", "z13", "z14", "z15", "z16", "z17", "z18"]
+
 begin
     nmodes = 9
     pl = []
@@ -38,6 +44,6 @@ begin
         push!(pl, pk)
     end
     p = plot(pl..., legend=nothing, size=(750,750), dpi=600, layout=(3, 3), suptitle="Linear reconstruction, simulated data")
-    Plots.savefig("figures/linear_sim.png")
+    Plots.savefig("figures/linear_sim.pdf")
     p
 end
