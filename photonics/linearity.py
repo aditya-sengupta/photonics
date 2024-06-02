@@ -79,14 +79,14 @@ def make_linearity(amplitudes, mode_sweep, cm):
 	
 	return responses
 
-def plot_linearity(amplitudes, responses, title_mod="", zlabels=None):
+def plot_linearity(amplitudes, responses, title_mod="", savepath="", zlabels=None):
 	nzern = responses.shape[0]
 	if zlabels is None:
 		zlabels = [zernike_names[i].title() for i in range(nzern)]
 	nrow = 3
 	ncol = int(np.ceil(nzern / 3))
 	fig, axs = plt.subplots(ncol, nrow, sharex=True, sharey=True, figsize=(3 * nrow, 3 * ncol))
-	title = "Photonic lantern linearity curves"
+	title = "Linearity curves"
 	if title_mod != "":
 		title += f", {title_mod}"
 	plt.suptitle(title, y=1.03)
@@ -105,7 +105,8 @@ def plot_linearity(amplitudes, responses, title_mod="", zlabels=None):
 	for k in range(i + 1, nrow * ncol):
 		r, c = k // 3, k % 3
 		fig.delaxes(axs[r][c])
-	plt.show()
+	if len(savepath) > 0:
+		plt.savefig(savepath, bbox_inches='tight')
  
 def linearity_loss(amplitudes, linearity_responses):
     comparison = np.eye(linearity_responses.shape[2])[:, np.newaxis, :]
