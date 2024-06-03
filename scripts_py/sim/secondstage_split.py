@@ -28,7 +28,6 @@ corr = partial(correction, optics=optics, pyramid=pyramid, lantern=lantern, f_lo
 focus_ncpa = optics.zernike_to_pupil(2, 0.3)
 # %%
 open_loop = corr(use_lantern=False, use_pyramid=False, ncpa=focus_ncpa)
-open_loop["phases_for"]
 # %%
 pyramid_correction = corr(use_pyramid=True)
 # %%

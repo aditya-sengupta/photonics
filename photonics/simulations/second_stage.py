@@ -8,7 +8,7 @@ from .wfs_filter import HighPassFilter, LowPassFilter
 def correction(
 	optics, pyramid, lantern, 
 	ncpa=None, f_cutoff=30,
- 	f_loop=100, num_iterations=200, gain=0.1, leakage=0.999, 
+ 	f_loop=800, num_iterations=200, gain=0.3, leakage=0.999, 
 	use_pyramid=False, use_lantern=False
 ):
 	"""
