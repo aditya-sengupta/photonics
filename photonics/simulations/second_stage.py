@@ -21,7 +21,9 @@ def correction(
 		"dm_commands" : [],
 		"dm_shapes" : [],
 		"point_spread_functions" : [],
-		"strehl_ratios" : []
+		"strehl_ratios" : [],
+		"lantern_zernikes_truth" : [],
+		"lantern_zernikes_measured" : []
 	}
 	a = np.exp(-2 * np.pi * f_cutoff / f_loop)
 	pyramid_filter = HighPassFilter(lantern.nmodes, a)
