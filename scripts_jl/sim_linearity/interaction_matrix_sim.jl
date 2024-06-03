@@ -2,11 +2,7 @@ using NPZ
 using Plots
 using PhotonicLantern
 
-pgfplotsx()
-
-plot_font = "Computer Modern"
-default(fontfamily=plot_font,
-        linewidth=2, framestyle=:box, label=nothing, grid=false)
+default(fontfamily="Computer Modern", linewidth=3, framestyle=:box, label=nothing, grid=true)
 
 amps = npzread("data/sweep_testset_amplitudes_.npy")
 p_i_all = npzread("data/sweep_testset_lanterns.npy") .|> abs2
@@ -38,12 +34,18 @@ begin
     for k in 1:nmodes
         lin_k = ((p_i_all[k,:,:]) * iA)[:,1:nmodes]
         a = [(k == i ? 1 : 0.2) for i in 1:(nmodes)]'
-        pk = plot(xlabel=mode_names[k], label=nothing, legend=:outertopright)
-        plot!(amps, lin_k, alpha=a)
+        pk = plot(xlabel=mode_names[k], label=nothing, legend=:outertopright, aspect_ratio=:equal, xlim=(-1,1), ylim=(-1,1))
         plot!(amps, amps, ls=:dash, color=:black)
+        plot!(amps, lin_k, alpha=a)
         push!(pl, pk)
     end
-    p = plot(pl..., legend=nothing, size=(750,750), dpi=600, layout=(3, 3), suptitle="Linear reconstruction, simulated data")
+    p = plot(pl..., legend=nothing, size=(900,900), dpi=600, suptitle="Photonic lantern linear reconstruction, simulated")
     Plots.savefig("figures/linear_sim.pdf")
     p
 end
+
+sweep = zeros(nmodes, size(p_i_all, 2), nmodes);
+for k in 1:nmodes
+    sweep[k,:,:] = (p_i_all[k,:,:] * iA)[:,1:nmodes]
+end
+npzwrite("data/linear_sweeps/pl_linear.npy", sweep)

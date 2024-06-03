@@ -34,7 +34,7 @@ function plot_linearity(amps, p_i_all, command_matrix; nmodes=18)
         push!(pl, pk)
     end
     nrows = 3 # nmodes ÷ 6
-    plot(pl..., legend=nothing, dpi=200, layout=(nrows, 6))
+    plot(pl..., legend=nothing, dpi=200, layout=(nrows, 3), size=(600,600))
     #  size=(200 * 6, 200 * nrows), 
 end
 

@@ -53,7 +53,7 @@ begin
     plot(pl..., layout=(3,6), plot_title="Principal lantern responses", plot_titlefontsize=13)
 end
 
-iA = p \ z
+iA = powers \ z
 
 U, S, Vt = svd(A)
 iU, iS, iVt = svd(iA)

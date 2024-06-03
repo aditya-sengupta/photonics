@@ -10,11 +10,11 @@ def make_command_matrix(
     flat_wavefront: hc.Wavefront,
     probe_amp=1e-10,
     dm_basis="modal",
-    rerun=True
+    rerun=False
 ):
     """
     Make a command matrix for a DM-WFS pair and assigns it to wfs.command_matrix
-    """  
+    """
     cmd_path = join(PROJECT_ROOT, "data", f"secondstage_{wfs.name}", f"cm_{date_now()}_{dm_basis}.npy")
     wfs.image_ref = wfs.readout(flat_wavefront)
     if (not rerun) and os.path.exists(cmd_path):

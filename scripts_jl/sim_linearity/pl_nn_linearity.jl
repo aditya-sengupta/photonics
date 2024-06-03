@@ -3,14 +3,10 @@ using NPZ
 using JLD2
 using Flux
 using Plots
+using Plots.PlotMeasures
 using StatsBase: mean
 
-pgfplotsx()
-
-plot_font = "Computer Modern"
-default(fontfamily=plot_font,
-        linewidth=2, framestyle=:box, label=nothing, grid=false)
-
+default(fontfamily="Computer Modern", linewidth=3, framestyle=:box, label=nothing, grid=true)
 
 zero_one_ify(x) = (x .- minimum(x)) ./ (maximum(x) .- minimum(x)), minimum(x), maximum(x)
 rescale(z, zmin, zmax) = z * (zmax - zmin) + zmin
@@ -40,13 +36,20 @@ for k in 1:nmodes
     nn_recon = rescale.(hcat([model(x) for x in eachrow(sweep_lanterns_normalized[k,:,:])]...)', xmin, xmax)
     a = [(k == i ? 1 : 0.2) for i in 1:(nmodes)]'
     pk = plot(xlabel=mode_names[k], label=nothing, legend=:outertopright, ylim=(-1, 1), xlim=(-1,1))
-    plot!(amplitudes, nn_recon, alpha=a)
     plot!(amplitudes, amplitudes, ls=:dash, color=:black)
+    plot!(amplitudes, nn_recon, alpha=a)
     push!(pl, pk)
 end
-p = plot(pl..., legend=nothing, size=(750,750), dpi=600, suptitle="Neural network reconstructor simulation, max train amplitude = $(round(xmax, digits=2)) rad", layout=(3, 3))
+p = plot(pl..., legend=nothing, size=(900,900), dpi=600, suptitle="Neural network reconstructor simulation, max train amplitude = $(round(xmax, digits=2)) rad", layout=(3, 3), left_margin=2Plots.mm)
 Plots.savefig("figures/nn_sim_0.25.pdf")
 p
+
+
+sweep = zeros(nmodes, length(amplitudes), nmodes);
+for k in 1:nmodes
+    sweep[k,:,:] = nn_recon = rescale.(hcat([model(x) for x in eachrow(sweep_lanterns_normalized[k,:,:])]...)', xmin, xmax)
+end
+npzwrite("data/linear_sweeps/pl_nn.npy", sweep)
 
 trainset_amplitudes_scaled_f32 = rescale.(trainset_amplitudes[:,48001:end], xmin, xmax)
 resid_train = rescale.(hcat(model.(eachcol(trainset_lanterns[:,48001:end]))...), xmin, xmax) - trainset_amplitudes_scaled_f32
