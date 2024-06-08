@@ -40,10 +40,9 @@ for k in 1:nmodes
     plot!(amplitudes, nn_recon, alpha=a)
     push!(pl, pk)
 end
-p = plot(pl..., legend=nothing, size=(900,900), dpi=600, suptitle="Neural network reconstructor simulation, max train amplitude = $(round(xmax, digits=2)) rad", layout=(3, 3), left_margin=2Plots.mm)
-Plots.savefig("figures/nn_sim_0.25.pdf")
+p = plot(pl..., legend=nothing, size=(900,900), dpi=600, suptitle="Neural network reconstructor simulation", layout=(3, 3), left_margin=2Plots.mm)
+Plots.savefig("figures/nn_sim_spie.pdf")
 p
-
 
 sweep = zeros(nmodes, length(amplitudes), nmodes);
 for k in 1:nmodes

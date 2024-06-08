@@ -18,8 +18,9 @@ optics = Optics(lantern_fnumber=6.5)
 pyr = PyramidOptics(optics)
 lo = LanternOptics(optics)
 lo.nmodes = 9
+dm = optics.deformable_mirror
 # %%
-test_phase_screens = np.random.uniform(-1, 1, (1000,9))
+test_phase_screens = np.random.uniform(-1, 1, (1000,lo.nmodes))
 test_normalizations = np.random.uniform(0, 1, (1000,))
 current_normalizations = np.sqrt(np.sum(test_phase_screens ** 2, axis=1))
 test_phase_screens /= current_normalizations[:,np.newaxis]
@@ -27,12 +28,16 @@ test_phase_screens *= test_normalizations[:,np.newaxis]
 rms_inputs = np.sqrt(np.sum(test_phase_screens ** 2, axis=1))
 plt.hist(rms_inputs)
 # %%
-pupils = [optics.zernike_to_pupil(np.arange(9), x) for x in test_phase_screens]
+dm.flatten()
+pupils = []
+for x in test_phase_screens:
+    dm.actuators[:lo.nmodes] = x * optics.wl / (4 * np.pi)
+    pupils.append(dm.forward(optics.wf))
 focals = lmap(optics.focal_propagator, pupils)
 coeffs = np.array(lmap(lo.lantern_coeffs, focals))
 # %%
 readings = np.abs(coeffs) ** 2 - lo.image_ref[np.newaxis,:]
-
+readings_unresidualized = np.abs(coeffs) ** 2
 # %%
 linear_reconstructions = readings @ lo.command_matrix.T / (optics.wl / (4 * np.pi))
 # %%
@@ -58,12 +63,11 @@ pyramid_linear_reconstructions_ = np.array(pyramid_linear_reconstructions) / (op
 pyramid_residuals = pyramid_linear_reconstructions_[:,:lo.nmodes] - test_phase_screens
 pyramid_rms_residuals = np.sqrt(np.sum(pyramid_residuals ** 2, axis=1))
 # %%
-np.save(path.join(DATA_PATH, "nonlinear_test", "zernike_inputs.npy"), test_phase_screens)
-np.save(path.join(DATA_PATH, "nonlinear_test", "output_coeffs.npy"), coeffs)
-np.save(path.join(DATA_PATH, "nonlinear_test", "pyramid_rms_residuals.npy"), pyramid_rms_residuals)
-np.save(path.join(DATA_PATH, "nonlinear_test", "rms_inputs.npy"), rms_inputs)
-np.save(path.join(DATA_PATH, "nonlinear_test", "rms_residuals.npy"), rms_residuals)
-np.save(path.join(DATA_PATH, "nonlinear_test", "gs_rms_residuals.npy"), gs_rms_residuals)
+save_nl = lambda x: np.save(path.join(DATA_PATH, "nonlinear_test", x + ".npy"), eval(x))
+
+# %%
+for x in ["test_phase_screens", "readings", "readings_unresidualized", "pyramid_rms_residuals", "rms_inputs", "rms_residuals", "gs_rms_residuals"]:
+    save_nl(x)
 # %%
 plt.scatter(rms_inputs, rms_residuals, s=3, label="Linear reconstructor")
 plt.scatter(rms_inputs, gs_rms_residuals, s=3, label="Gerchberg-Saxton")

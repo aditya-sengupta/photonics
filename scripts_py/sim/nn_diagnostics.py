@@ -20,7 +20,6 @@ from juliacall import Main as jl
 jl.seval("using Flux")
 jl.seval("using JLD2")
 # %%
-max_amp_nn = 0.25
 optics = Optics(lantern_fnumber=6.5, dm_basis="modal")
 lo = LanternOptics(optics)
 model_state = jl.JLD2.load(DATA_PATH + f"/pl_nn/pl_nn_spieeval.jld2", "model_state")
@@ -32,6 +31,7 @@ model = jl.Chain(
 )
 
 jl.Flux.loadmodel_b(model, model_state)
+xmin, xmax = (lambda x: (np.min(x), np.max(x)))(np.abs(np.load(DATA_PATH + "/sim_trainsets/sim_trainset_amplitudes_spieeval.npy")) ** 2)
 ymin, ymax = (lambda x: (np.min(x), np.max(x)))(np.abs(np.load(DATA_PATH + "/sim_trainsets/sim_trainset_lanterns_spieeval.npy")) ** 2)
 zernike_basis = hc.mode_basis.make_zernike_basis(nzern, optics.telescope_diameter, optics.pupil_grid)
 dm = optics.deformable_mirror
@@ -49,44 +49,11 @@ def nn_inject_recover(zernikes, amplitudes):
     post_lantern_coeffs = lo.lantern_coeffs(psf)
     intensities = np.abs(post_lantern_coeffs) ** 2
     norm_intensities = ((intensities - ymin) / (ymax - ymin)).astype(np.float32)
-    reconstructed_zernike_coeffs = np.array(model(norm_intensities)) * 0.5 - 0.25
+    reconstructed_zernike_coeffs = np.array(model(norm_intensities)) * (xmax - xmin) + xmin
     return reconstructed_zernike_coeffs
-
-def reconstruct(phase_screen, plot=True):
-    """
-    Takes in a post-DM phase screen and injects and recovers it from the lantern.
-    """
-    phase_screen_coeffs = zernike_basis.coefficients_for(phase_screen - np.mean(phase_screen))
-    phase_screen_projected = zernike_basis.linear_combination(phase_screen_coeffs)
-    psf = optics.focal_propagator(
-        hc.Wavefront(optics.aperture * np.exp(1j * phase_screen_projected), optics.wl)
-    )
-    post_lantern_coeffs = lo.lantern_coeffs(psf)
-    intensities = np.abs(post_lantern_coeffs) ** 2
-    norm_intensities = ((intensities - ymin) / (ymax - ymin)).astype(np.float32)
-    reconstructed_zernike_coeffs = model(norm_intensities) 
-    reconstructed_phase = zernike_basis.linear_combination(max_amp_nn * np.array(reconstructed_zernike_coeffs) - max_amp_nn/2)
-    
-    if plot:
-        _, axs = plt.subplots(1, 3)
-        for ax in axs:
-            ax.axis('off')
-        projected_zeroed = nanify(phase_screen_projected, optics.aperture)
-        reconstructed_zeroed = nanify(reconstructed_phase, optics.aperture)
-        vmin = np.minimum(np.nanmin(projected_zeroed), np.nanmin(reconstructed_zeroed))
-        vmax = np.maximum(np.nanmax(projected_zeroed), np.nanmax(reconstructed_zeroed))
-        imshow_field(np.log10(psf.intensity / optics.norm), ax=axs[0], vmin=-5)
-        axs[0].set_title("PSF")
-        imshow_field(projected_zeroed, ax=axs[1], vmin=vmin, vmax=vmax)
-        axs[1].set_title(f"PL input phase, {rms(phase_screen_coeffs):.2f} rad", fontsize=10)
-        imshow_field(reconstructed_zeroed, ax=axs[2], vmin=vmin, vmax=vmax)
-        axs[2].set_title("PL recon. phase", fontsize=10)
-        plt.show()
         
 # %%
 nn_inject_recover(5, -0.8)
-# %%
-reconstruct(optics.zernike_to_pupil(3, 0.0).phase)
 # %%
 test_amplitudes = np.load(DATA_PATH + "/sim_trainsets/sim_testset_amplitudes_spieeval.npy")
 test_intensities = np.abs(np.load(DATA_PATH + "/sim_trainsets/sim_testset_lanterns_spieeval.npy")) ** 2
@@ -94,7 +61,7 @@ norm_test_intensities = ((test_intensities - ymin) / (ymax - ymin)).astype(np.fl
 
 squared_error = 0
 for (av, lv) in zip(test_amplitudes, norm_test_intensities):
-    rv = np.array(model(lv)) * 0.5 - 0.25
+    rv = np.array(model(lv)) * (xmax - xmin) - xmin
     squared_error += np.sum((av - rv) ** 2)
 
 rms_error = np.sqrt(squared_error / test_amplitudes.shape[0])
