@@ -4,7 +4,11 @@ import hcipy as hc
 import lightbeam as lb
 from hcipy import imshow_field
 from matplotlib import pyplot as plt
-from ..utils import PROJECT_ROOT, date_now, zernike_names, nanify
+from juliacall import Main as jl
+jl.seval("using Flux")
+jl.seval("using JLD2")
+
+from ..utils import PROJECT_ROOT, DATA_PATH, date_now, zernike_names, nanify
 from .command_matrix import make_command_matrix
 
 class LanternOptics:
@@ -55,7 +59,17 @@ class LanternOptics:
 		self.focal_propagator = optics.focal_propagator
 		self.focal_grid = optics.focal_grid
 		self.input_ref = optics.im_ref
-		make_command_matrix(optics.deformable_mirror, self, optics.wf, probe_amp=1.2e-8, rerun=True)
+		make_command_matrix(optics.deformable_mirror, self, optics.wf, probe_amp=1.2e-8, rerun=False)
+		self.max_amp_nn = 0.25
+		model_fname = f"pl_nn_{self.max_amp_nn}"
+		model_state = jl.JLD2.load(DATA_PATH + f"/pl_nn/{model_fname}.jld2", "model_state")
+		self.model = jl.Chain(
+			jl.Dense(19, 2000, jl.relu),
+			jl.Dense(2000, 100, jl.relu),
+			jl.Dense(100, 9)
+		)
+		jl.Flux.loadmodel_b(self.model, model_state)
+		self.ymin, self.ymax = (lambda x: (np.min(x), np.max(x)))(np.abs(np.load(DATA_PATH + "/sim_trainsets/sim_trainset_lanterns_240428_1706.npy")) ** 2)
 
 	def input_to_2d(self, input_efield, zoomed=True, restore_outside=False):
 		"""
@@ -285,3 +299,10 @@ class LanternOptics:
 		plt.savefig(join(PROJECT_ROOT, "figures", "lantern_modes_19.png"), dpi=600, bbox_inches="tight")
 		plt.show()
   
+	def nn_reconstruct(self, intensities):
+		norm_intensities = ((intensities - self.ymin) / (self.ymax - self.ymin)).astype(np.float32)
+		reconstructed_zernike_coeffs = self.model(norm_intensities)
+		return self.max_amp_nn * np.array(reconstructed_zernike_coeffs) - self.max_amp_nn/2
+
+	def linear_reconstruct(self, intensities):
+		return self.command_matrix(intensities - self.input_ref)

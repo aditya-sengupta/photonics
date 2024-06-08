@@ -9,26 +9,29 @@ using Base.GC: gc
 using CUDA
 using JLD2
 
-zero_one_ify(x) = (x .- minimum(x)) ./ (maximum(x) .- minimum(x)), minimum(x), maximum(x)
+function zero_one_ify(x, xmin=nothing, xmax=nothing)
+    if isnothing(xmin) && isnothing(xmax)
+        xmin, xmax = minimum(x), maximum(x)
+    end
+    return (x .- minimum(x)) ./ (maximum(x) .- minimum(x)), minimum(x), maximum(x)
+end
+
 rescale(z, zmin, zmax) = z * (zmax - zmin) + zmin
 
-X_all, xmin, xmax = @chain npzread("data/sim_trainsets/sim_trainset_amplitudes_240502_1947.npy") transpose Matrix zero_one_ify gpu
-y_all, ymin, ymax = @chain npzread("data/sim_trainsets/sim_trainset_lanterns_240502_1947.npy") abs2.(_) transpose Matrix zero_one_ify gpu
-# X_all, y_all = Matrix{Float32}(X_all), Matrix{Float32}(y_all)
+X_train, xmin, xmax = @chain npzread("data/sim_trainsets/sim_trainset_amplitudes_spieeval.npy") transpose Matrix zero_one_ify gpu
+y_train, ymin, ymax = @chain npzread("data/sim_trainsets/sim_trainset_lanterns_spieeval.npy") abs2.(_) transpose Matrix zero_one_ify gpu
+X_test = @chain npzread("data/sim_trainsets/sim_testset_amplitudes_spieeval.npy") transpose Matrix zero_one_ify(_, xmin, xmax) (_[1]) gpu
+y_test = @chain npzread("data/sim_trainsets/sim_testset_lanterns_spieeval.npy") abs2.(_) transpose Matrix zero_one_ify(_, ymin, ymax) (_[1]) gpu
 
-cutoff = Int(round(0.8 * size(X_all, 2)))
-X_train, X_test = X_all[:,1:cutoff], X_all[:,cutoff+1:end]
-y_train, y_test = y_all[:,1:cutoff], y_all[:,cutoff+1:end]
-
-nzern = size(X_all, 1)
+nzern = size(X_train, 1)
 ws1, ws2 = 2000, 100
 # ws1, ws2 = 200 * (nzern + 1), 10 * (nzern + 1)
 
 model = Chain(
-    Dense(size(y_all, 1) => ws1, relu),
+    Dense(size(y_train, 1) => ws1, relu),
     Dense(ws1 => ws2, relu),
-    Flux.Dropout(0.2),
-    Dense(ws2 => size(X_all, 1))
+    # Flux.Dropout(0.2),
+    Dense(ws2 => size(X_train, 1))
 ) |> gpu
 
 optim = Flux.setup(Adam(1e-3), model)
@@ -69,6 +72,6 @@ error_per_zern = mean(abs, X_test .- model(y_test), dims=2) |> cpu
 plot(error_per_zern, xlabel="Zernike mode", ylabel="Fractional error", label=nothing)
 
 model_state = Flux.state(cpu(model))
-jldsave("data/pl_nn/pl_nn_$(round(xmax, digits=2))_$(size(X_all, 1)).jld2"; model_state)
+jldsave("data/pl_nn/pl_nn_spieeval.jld2"; model_state)
 
 # for the phase screen test stuff, look on the git history

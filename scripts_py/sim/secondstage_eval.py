@@ -21,7 +21,7 @@ plt.rcParams.update(params)
 
 # %%
 n_filter = 9
-f_cutoff = 100
+f_cutoff = 30
 f_loop = 800
 dt = 1/f_loop
 optics = Optics(lantern_fnumber=6.5, dm_basis="modal")
@@ -31,8 +31,8 @@ corr = partial(correction, optics=optics, pyramid=pyramid, lantern=lantern, f_lo
 focus_ncpa = optics.zernike_to_pupil(2, 0.3)
 
 # %%
-niter = 300
-second_stage_iter = 100
+niter = 800
+second_stage_iter = 200
 D_over_r0s = [1, 2, 4, 8, 16, 32, 64]
 colors = cm.cool(np.linspace(0, 1, len(D_over_r0s)))
 for (c, D_over_r0) in zip(colors, D_over_r0s):

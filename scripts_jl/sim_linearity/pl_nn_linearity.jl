@@ -13,13 +13,13 @@ rescale(z, zmin, zmax) = z * (zmax - zmin) + zmin
 amplitudes = npzread("data/sweep_testset_amplitudes_19.npy")
 sweep_lanterns = abs2.(npzread("data/sweep_testset_lanterns_19.npy"))
 
-timestamp = "240428_1706"
+timestamp = "spieeval"
 trainset_amplitudes, xmin, xmax = @chain npzread("data/sim_trainsets/sim_trainset_amplitudes_$timestamp.npy") transpose Matrix zero_one_ify
 trainset_lanterns, ymin, ymax = @chain npzread("data/sim_trainsets/sim_trainset_lanterns_$timestamp.npy") abs2.(_) transpose Matrix zero_one_ify
 
 trainset_lanterns = Float32.(trainset_lanterns)
 
-model_state = JLD2.load("data/pl_nn/pl_nn_0.25.jld2", "model_state");
+model_state = JLD2.load("data/pl_nn/pl_nn_spieeval.jld2", "model_state");
 model = Flux.Chain(
     Dense(19 => 2000, relu),
     Dense(2000 => 100, relu),

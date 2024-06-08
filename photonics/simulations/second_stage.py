@@ -11,10 +11,14 @@ def correction(
  	f_loop=800, num_iterations=200, gain=0.3, leakage=0.999, 
 	second_stage_iter=100,
 	use_pyramid=False, use_lantern=False,
-	perfect_pyramid=False, perfect_lantern=False,
+	pyramid_recon="linear", lantern_recon="linear",
 ):
 	"""
 	Simulates a full two-stage AO loop.
+ 
+	Switches reconstruction strategies on the pyramid and lantern according to
+	pyramid_recon : "perfect" or "linear"
+	lantern_recon : "perfect", "linear", "nn", "gs"
 	"""
 	correction_results = {
 		"phases_for" : [],
@@ -59,7 +63,7 @@ def correction(
 			focal_zernikes_truth = optics.zernike_basis.coefficients_for(wf_with_ncpa.phase)
 			correction_results["focal_zernikes_truth"].append(focal_zernikes_truth)
 			if use_pyramid:
-				if perfect_pyramid:
+				if pyramid_recon == "perfect":
 					pyramid_reading = focal_zernikes_truth * (optics.wl / (4 * np.pi))
 				else:
 					pyramid_reading = pyramid.reconstruct(wf_after_dm)
@@ -71,8 +75,12 @@ def correction(
 					dm_command[:pyramid_filter.n] = hpf_reading
 
 			lantern_reading = np.abs(lantern.lantern_coeffs(wf_focal)) ** 2
-			if perfect_lantern:
+			if lantern_recon == "perfect":
 				lantern_zernikes_measured = focal_zernikes_truth[:lantern_filter.n] * (optics.wl / (4 * np.pi))
+			elif lantern_recon == "nn":
+				pass
+			elif lantern_recon == "gs":
+				pass
 			else:
 				lantern_zernikes_measured = lantern.command_matrix @ (lantern_reading - lantern.image_ref)
 			correction_results["lantern_readings"].append(lantern_zernikes_measured)
