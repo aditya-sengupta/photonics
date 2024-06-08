@@ -10,7 +10,10 @@ import hcipy as hc
 from hcipy import imshow_field
 from matplotlib import pyplot as plt
 from photonics.utils import lmap, rms
-from photonics import Optics, PyramidOptics, LanternOptics, correction
+from photonics.simulations.optics import Optics
+from photonics.simulations.pyramid_optics import PyramidOptics
+from photonics.simulations.lantern_optics import LanternOptics
+from photonics.simulations.second_stage import correction
 
 # %%
 n_filter = 9
@@ -20,7 +23,7 @@ dt = 1/f_loop
 optics = Optics(lantern_fnumber=6.5, dm_basis="modal")
 pyramid = PyramidOptics(optics)
 lantern = LanternOptics(optics)
-optics.turbulence_setup(fried_parameter=0.1, seed=10)
+optics.turbulence_setup(fried_parameter=0.1, seed=1)
 corr = partial(correction, optics=optics, pyramid=pyramid, lantern=lantern, f_loop=f_loop)
 focus_ncpa = optics.zernike_to_pupil(2, 0.3)
 # %%

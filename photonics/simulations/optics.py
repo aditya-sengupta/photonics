@@ -31,11 +31,11 @@ class Optics:
 		self.dm_setup(dm_basis)
 		self.zernike_basis = hc.mode_basis.make_zernike_basis(self.deformable_mirror.num_actuators, self.telescope_diameter, self.pupil_grid, starting_mode=2)
 		
-	def turbulence_setup(self, fried_parameter=0.5, outer_scale=50, velocity=10.0, seed=1):
+	def turbulence_setup(self, fried_parameter=0.1, outer_scale=50, velocity=10.0, seed=1):
 		Cn_squared = hc.Cn_squared_from_fried_parameter(fried_parameter)
 		self.layer = hc.InfiniteAtmosphericLayer(self.pupil_grid, Cn_squared, outer_scale, velocity, seed=seed)
 		
-	def dm_setup(self, dm_basis, num_actuators=20):
+	def dm_setup(self, dm_basis, num_actuators=9):
 		if dm_basis == "zonal":
 			actuator_spacing = self.telescope_diameter / num_actuators
 			influence_functions = hc.make_gaussian_influence_functions(self.pupil_grid, num_actuators, actuator_spacing)

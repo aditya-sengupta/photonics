@@ -73,9 +73,11 @@ plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
 plt.subplots_adjust(right=0.8)
 
 # %%
-zr = np.arange(18)
-ar = np.arange(-1.0, 1.01, 0.2)
+zr = np.arange(9)
+ar = np.arange(-1.0, 1.01, 0.01)
 sweep = np.zeros((len(zr), len(ar), len(zr)))
+
+# %%
 for (i, z) in enumerate(zr):
     print(zernike_names[i])
     for (j, a) in enumerate(tqdm(ar)):
@@ -89,6 +91,8 @@ for (i, z) in enumerate(zr):
         retrieved_zernikes = optics.zernike_basis.coefficients_for(EM_in.phase)[:len(zr)]
         sweep[i,j,:] = retrieved_zernikes
         
+# %%
+np.save("../../data/linear_sweeps/gs.npy", sweep)
 # %%
 plot_linearity(ar, sweep, "Gerchberg-Saxton")
 # %%

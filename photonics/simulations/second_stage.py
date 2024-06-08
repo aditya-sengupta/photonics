@@ -8,7 +8,7 @@ from .wfs_filter import HighPassFilter, LowPassFilter
 def correction(
 	optics, pyramid, lantern, 
 	ncpa=None, f_cutoff=30,
- 	f_loop=100, num_iterations=200, gain=0.3, leakage=0.999, 
+ 	f_loop=800, num_iterations=200, gain=0.3, leakage=0.999, 
 	use_pyramid=False, use_lantern=False
 ):
 	"""
@@ -21,7 +21,9 @@ def correction(
 		"dm_commands" : [],
 		"dm_shapes" : [],
 		"point_spread_functions" : [],
-		"strehl_ratios" : []
+		"strehl_ratios" : [],
+		"lantern_zernikes_truth" : [],
+		"lantern_zernikes_measured" : []
 	}
 	a = np.exp(-2 * np.pi * f_cutoff / f_loop)
 	pyramid_filter = HighPassFilter(lantern.nmodes, a)

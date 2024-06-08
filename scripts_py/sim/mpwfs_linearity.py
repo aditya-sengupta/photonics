@@ -24,7 +24,7 @@ dm.actuators[3] = 0.1 * optics.wl / (2 * np.pi)
 pyramid.reconstruct(dm.forward(optics.wf))
 # %%
 zr = np.arange(9)
-ar = np.arange(-1.0, 1.01, 0.05)
+ar = np.arange(-1.0, 1.01, 0.01)
 sweep = np.zeros((len(zr), len(ar), len(zr)))
 for (i, z) in enumerate(tqdm(zr)):
     for (j, a) in enumerate(ar):
