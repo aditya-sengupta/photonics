@@ -2,7 +2,7 @@ import hcipy as hc
 from .command_matrix import make_command_matrix
 
 class PyramidOptics:
-    def __init__(self, optics, pixels_pyramid_pupils=20, mld=5, modsteps=12):
+    def __init__(self, optics, pixels_pyramid_pupils=30, mld=5, modsteps=12):
         """
         Make a pyramid wavefront sensor based on an optical setup.
         """

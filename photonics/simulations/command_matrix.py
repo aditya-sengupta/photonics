@@ -1,3 +1,4 @@
+from tqdm import trange
 import hcipy as hc
 import os
 import numpy as np
@@ -24,7 +25,7 @@ def make_command_matrix(
         if hasattr(wfs, "nmodes"):
             num_modes = min(num_modes, wfs.nmodes)
         slopes = []
-        for ind in range(num_modes):
+        for ind in trange(num_modes):
             slope = 0
             for s in [1, -1]:
                 amp = np.zeros((dm.num_actuators,))

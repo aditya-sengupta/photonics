@@ -10,7 +10,7 @@ class Optics:
 		self.lantern_fnumber = lantern_fnumber
 		self.mesh_extent = 512 # microns
 		self.mesh_spacing = 1 # micron
-		self.telescope_diameter = 1
+		self.telescope_diameter = 10
 		self.wl = 1.55e-6
 		self.k = 2 * np.pi / self.wl
 		self.pupil_grid = hc.make_pupil_grid(num_pupil_px, self.telescope_diameter)
@@ -35,7 +35,7 @@ class Optics:
 		Cn_squared = hc.Cn_squared_from_fried_parameter(fried_parameter)
 		self.layer = hc.InfiniteAtmosphericLayer(self.pupil_grid, Cn_squared, outer_scale, velocity, seed=seed)
 		
-	def dm_setup(self, dm_basis, num_actuators=9):
+	def dm_setup(self, dm_basis, num_actuators=20):
 		if dm_basis == "zonal":
 			actuator_spacing = self.telescope_diameter / num_actuators
 			influence_functions = hc.make_gaussian_influence_functions(self.pupil_grid, num_actuators, actuator_spacing)

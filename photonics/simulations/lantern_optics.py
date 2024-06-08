@@ -55,7 +55,7 @@ class LanternOptics:
 		self.focal_propagator = optics.focal_propagator
 		self.focal_grid = optics.focal_grid
 		self.input_ref = optics.im_ref
-		make_command_matrix(optics.deformable_mirror, self, optics.wf, rerun=True)
+		make_command_matrix(optics.deformable_mirror, self, optics.wf, probe_amp=1.2e-8, rerun=True)
 
 	def input_to_2d(self, input_efield, zoomed=True, restore_outside=False):
 		"""
@@ -152,7 +152,7 @@ class LanternOptics:
 		axs[1].imshow(np.abs(lantern_reading))
 		axs[1].set_title("Lantern output")
 		plt.show()
-		
+  
 	def make_linearity(self, optics, lim=0.1, step=None):
 		conversion = (4 * np.pi / self.wl)
 		dm = optics.deformable_mirror
@@ -211,18 +211,19 @@ class LanternOptics:
 		EM_out = self.forward(optics, measuredAmplitude_in)
 		# replacing by known amplitude
 		phase_out_0 = EM_out.phase
-		EM_out = measuredAmplitude_out * np.exp(1j*phase_out_0)
+		EM_out_replaced = measuredAmplitude_out * np.exp(1j*phase_out_0)
 		# Back Propagation in PL
 		if guess is None:
-			EM_in = self.backward(optics, hc.Wavefront(EM_out, wavelength=self.wl), restore_outside=restore_outside)
+			EM_in = self.backward(optics, hc.Wavefront(EM_out_replaced, wavelength=self.wl), restore_outside=restore_outside)
 		else:
 			EM_in = guess
-		return EM_in, measuredAmplitude_in, measuredAmplitude_out
+		filteredAmplitude_in = np.abs(self.backward(optics, EM_out).electric_field)
+		return EM_in, filteredAmplitude_in, measuredAmplitude_out
 
 	def GS_iteration(self, optics, EM_in, measuredAmplitude_in, measuredAmplitude_out, restore_outside=False):
 		# replacing by known amplitude
 		phase_in_k = EM_in.phase
-		EM_in = hc.Wavefront(measuredAmplitude_in.electric_field*np.exp(1j*phase_in_k),wavelength=self.wl)
+		EM_in = hc.Wavefront(measuredAmplitude_in*np.exp(1j*phase_in_k),wavelength=self.wl)
 		# Lantern forward propagation
 		EM_out = self.forward(optics, EM_in)
 		# replacing by known amplitude
