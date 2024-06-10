@@ -60,8 +60,7 @@ class LanternOptics:
 		self.focal_grid = optics.focal_grid
 		self.input_ref = optics.im_ref
 		make_command_matrix(optics.deformable_mirror, self, optics.wf, probe_amp=1.2e-8, rerun=False)
-		self.max_amp_nn = 0.25
-		model_fname = f"pl_nn_{self.max_amp_nn}"
+		model_fname = "pl_nn_spieeval"
 		model_state = jl.JLD2.load(DATA_PATH + f"/pl_nn/{model_fname}.jld2", "model_state")
 		self.model = jl.Chain(
 			jl.Dense(19, 2000, jl.relu),
@@ -69,7 +68,8 @@ class LanternOptics:
 			jl.Dense(100, 9)
 		)
 		jl.Flux.loadmodel_b(self.model, model_state)
-		self.ymin, self.ymax = (lambda x: (np.min(x), np.max(x)))(np.abs(np.load(DATA_PATH + "/sim_trainsets/sim_trainset_lanterns_240428_1706.npy")) ** 2)
+		self.ymin, self.ymax = (lambda x: (np.min(x), np.max(x)))(np.abs(np.load(DATA_PATH + "/sim_trainsets/sim_trainset_lanterns_spieeval.npy")) ** 2)
+		self.xmin, self.xmax = (lambda x: (np.min(x), np.max(x)))(np.load(DATA_PATH + "/sim_trainsets/sim_trainset_amplitudes_spieeval.npy"))
 
 	def input_to_2d(self, input_efield, zoomed=True, restore_outside=False):
 		"""
@@ -248,7 +248,7 @@ class LanternOptics:
 			
 		return EM_in
 
-	def GS(self, optics, img, guess=None, niter=10):
+	def GS(self, optics, img, guess=None, niter=8):
 		"""
 		Gerchberg-Saxton algorithm
 		"""
@@ -258,7 +258,7 @@ class LanternOptics:
 			
 		return EM_in
 	
-	def show_GS(self, optics, zernike, amplitude, guess=None, niter=10):
+	def show_GS(self, optics, zernike, amplitude, guess=None, niter=4):
 		input_phase = optics.zernike_to_phase(zernike, amplitude)
 		input_pupil = optics.phase_to_pupil(input_phase)
 		reading = self.forward(optics, input_pupil)
@@ -302,7 +302,7 @@ class LanternOptics:
 	def nn_reconstruct(self, intensities):
 		norm_intensities = ((intensities - self.ymin) / (self.ymax - self.ymin)).astype(np.float32)
 		reconstructed_zernike_coeffs = self.model(norm_intensities)
-		return self.max_amp_nn * np.array(reconstructed_zernike_coeffs) - self.max_amp_nn/2
+		return np.array(reconstructed_zernike_coeffs) * (self.xmax - self.xmin) + self.xmin
 
 	def linear_reconstruct(self, intensities):
-		return self.command_matrix(intensities - self.input_ref)
+		return self.command_matrix @ (intensities - self.image_ref)

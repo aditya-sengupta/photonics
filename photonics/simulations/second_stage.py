@@ -42,6 +42,7 @@ def correction(
 	dt = 1/f_loop
 	correction_results["time"] = np.arange(0, dt * num_iterations, dt)
 	do_second_stage = False
+	GS_output = None
 	with tqdm(range(num_iterations), file=sys.stdout) as progress:
 		for timestep in progress:
 			close_second_stage = use_pyramid and use_lantern and timestep == second_stage_iter
@@ -74,15 +75,20 @@ def correction(
 				if do_second_stage:
 					dm_command[:pyramid_filter.n] = hpf_reading
 
-			lantern_reading = np.abs(lantern.lantern_coeffs(wf_focal)) ** 2
+			lantern_coeffs = lantern.lantern_coeffs(wf_focal)
+			lantern_reading = np.abs(lantern_coeffs) ** 2
 			if lantern_recon == "perfect":
 				lantern_zernikes_measured = focal_zernikes_truth[:lantern_filter.n] * (optics.wl / (4 * np.pi))
 			elif lantern_recon == "nn":
-				pass
+				lantern_zernikes_measured = lantern.nn_reconstruct(lantern_reading) * (optics.wl / (4 * np.pi))
 			elif lantern_recon == "gs":
-				pass
+				reading_field = np.abs(sum(c * lf for (c, lf) in zip(lantern_reading, lantern.launch_fields))) ** 2
+				reading_field = hc.Wavefront(hc.Field(reading_field.ravel(), optics.focal_grid), wavelength=optics.wl)
+				GS_output = lantern.GS(optics, reading_field.intensity, guess=GS_output)
+				GS_phase_screen = GS_output.phase
+				lantern_zernikes_measured = optics.zernike_basis.coefficients_for(GS_phase_screen)[:lantern_filter.n] * optics.wl / (4 * np.pi)
 			else:
-				lantern_zernikes_measured = lantern.command_matrix @ (lantern_reading - lantern.image_ref)
+				lantern_zernikes_measured = lantern.linear_reconstruct(lantern_reading) #lantern.command_matrix @ (lantern_reading - lantern.image_ref)
 			correction_results["lantern_readings"].append(lantern_zernikes_measured)
 			lpf_reading = lantern_filter(lantern_zernikes_measured)
 			correction_results["lpf_readings"].append(lpf_reading)
