@@ -56,6 +56,10 @@ def correction(
 					)
 			else:
 				wf_with_ncpa = wf_after_dm
+			#wf_with_ncpa_phase_coeffs = optics.zernike_basis.coefficients_for(wf_with_ncpa.phase)
+			#wf_with_ncpa_phase_coeffs[9:] = 0
+			#wf_with_ncpa_phase_recon = optics.zernike_basis.linear_combination(wf_with_ncpa_phase_coeffs)
+			#wf_with_ncpa_recon = hc.Wavefront(np.abs(wf_with_ncpa.electric_field) * np.exp(1j * wf_with_ncpa_phase_recon), wavelength=optics.wl)
 			wf_focal = optics.focal_propagator.forward(wf_with_ncpa)
 			correction_results["point_spread_functions"].append(wf_focal.copy())
 			strehl_foc = hc.get_strehl_from_focal(wf_focal.intensity/optics.norm, optics.im_ref.intensity/optics.norm)
@@ -84,7 +88,7 @@ def correction(
 			elif lantern_recon == "gs":
 				reading_field = np.abs(sum(c * lf for (c, lf) in zip(lantern_reading, lantern.launch_fields))) ** 2
 				reading_field = hc.Wavefront(hc.Field(reading_field.ravel(), optics.focal_grid), wavelength=optics.wl)
-				GS_output = lantern.GS(optics, reading_field.intensity, guess=GS_output)
+				GS_output = lantern.GS(optics, reading_field.intensity, guess=None)
 				GS_phase_screen = GS_output.phase
 				lantern_zernikes_measured = optics.zernike_basis.coefficients_for(GS_phase_screen)[:lantern_filter.n] * optics.wl / (4 * np.pi)
 			else:
