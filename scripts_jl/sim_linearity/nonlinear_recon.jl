@@ -5,6 +5,8 @@ using Flux
 using JLD2
 using StatsBase: mean
 
+pgfplotsx()
+
 default(fontfamily= "Computer Modern", linewidth=3, framestyle=:box, label=nothing, grid=true, legend_font_halign=:left)
 
 function zero_one_ify(x, xmin=nothing, xmax=nothing)
