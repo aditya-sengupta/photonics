@@ -36,7 +36,7 @@ focus_ncpa = optics.zernike_to_pupil(2, 0.3)
 niter = 100
 second_stage_iter = 20
 D_over_r0s = [16]
-lantern_recons = ["linear", "gs"]
+lantern_recons = ["gs"]
 strehls_grid = np.zeros((len(D_over_r0s), len(lantern_recons), niter))
 for (i, D_over_r0) in enumerate(D_over_r0s):
     optics.turbulence_setup(fried_parameter=optics.telescope_diameter/D_over_r0, seed=371)
@@ -61,10 +61,7 @@ plt.plot(gs_zernikes_over_time[:,2], label="True pupil-plane focus")
 plt.plot(lantern_measured_zernikes[:,2] / (optics.wl / (4 * np.pi)), label="Lantern-reconstructed focal-plane focus")
 plt.legend()
 # %%
-plt.figure()
-im = imshow_field(twostage_correction["wavefronts_after_dm"][0].phase)
-for i in range(0, 100):
-    imshow_field(twostage_correction["wavefronts_after_dm"][i].phase, vmin=(-np.pi), vmax=(np.pi))
-    plt.pause(0.5)
-    plt.draw()
+i = 10
+print("truth", twostage_correction["focal_zernikes_truth"][i][:9])
+print("gs", lantern.gs_inject_recover(np.arange(9), twostage_correction["focal_zernikes_truth"][i][:9], optics))
 # %%

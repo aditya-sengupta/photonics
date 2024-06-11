@@ -56,10 +56,6 @@ def correction(
 					)
 			else:
 				wf_with_ncpa = wf_after_dm
-			#wf_with_ncpa_phase_coeffs = optics.zernike_basis.coefficients_for(wf_with_ncpa.phase)
-			#wf_with_ncpa_phase_coeffs[9:] = 0
-			#wf_with_ncpa_phase_recon = optics.zernike_basis.linear_combination(wf_with_ncpa_phase_coeffs)
-			#wf_with_ncpa_recon = hc.Wavefront(np.abs(wf_with_ncpa.electric_field) * np.exp(1j * wf_with_ncpa_phase_recon), wavelength=optics.wl)
 			wf_focal = optics.focal_propagator.forward(wf_with_ncpa)
 			correction_results["point_spread_functions"].append(wf_focal.copy())
 			strehl_foc = hc.get_strehl_from_focal(wf_focal.intensity/optics.norm, optics.im_ref.intensity/optics.norm)
@@ -86,13 +82,14 @@ def correction(
 			elif lantern_recon == "nn":
 				lantern_zernikes_measured = lantern.nn_reconstruct(lantern_reading) * (optics.wl / (4 * np.pi))
 			elif lantern_recon == "gs":
-				reading_field = np.abs(sum(c * lf for (c, lf) in zip(lantern_reading, lantern.launch_fields))) ** 2
+				"""reading_field = sum(np.abs(c) ** 2 * lf for (c, lf) in zip(lantern_reading, lantern.launch_fields))
 				reading_field = hc.Wavefront(hc.Field(reading_field.ravel(), optics.focal_grid), wavelength=optics.wl)
 				GS_output = lantern.GS(optics, reading_field.intensity, guess=None)
 				GS_phase_screen = GS_output.phase
-				lantern_zernikes_measured = optics.zernike_basis.coefficients_for(GS_phase_screen)[:lantern_filter.n] * optics.wl / (4 * np.pi)
+				lantern_zernikes_measured = optics.zernike_basis.coefficients_for(GS_phase_screen)[:lantern_filter.n] * optics.wl / (4 * np.pi)"""
+				lantern_zernikes_measured = lantern.gs_reconstruct(lantern_reading, optics)[:lantern_filter.n] * (optics.wl / (4 * np.pi))
 			else:
-				lantern_zernikes_measured = lantern.linear_reconstruct(lantern_reading) #lantern.command_matrix @ (lantern_reading - lantern.image_ref)
+				lantern_zernikes_measured = lantern.linear_reconstruct(lantern_reading)
 			correction_results["lantern_readings"].append(lantern_zernikes_measured)
 			lpf_reading = lantern_filter(lantern_zernikes_measured)
 			correction_results["lpf_readings"].append(lpf_reading)
@@ -110,6 +107,5 @@ def correction(
 			dm.actuators = leakage * dm.actuators - gain * dm_command
 			strehl_averaged = np.mean(correction_results["strehl_ratios"][max(0,timestep-10):timestep+1])
 			progress.set_postfix(strehl=f"{float(strehl_averaged):.3f}")
-
 
 	return correction_results

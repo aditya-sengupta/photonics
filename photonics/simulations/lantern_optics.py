@@ -237,7 +237,8 @@ class LanternOptics:
 	def GS_iteration(self, optics, EM_in, measuredAmplitude_in, measuredAmplitude_out, restore_outside=False):
 		# replacing by known amplitude
 		phase_in_k = EM_in.phase
-		EM_in = hc.Wavefront(measuredAmplitude_in*np.exp(1j*phase_in_k),wavelength=self.wl)
+		# measuredAmplitude_in * np.abs(EM_in)
+		EM_in = hc.Wavefront(measuredAmplitude_in *np.exp(1j*phase_in_k),wavelength=self.wl)
 		# Lantern forward propagation
 		EM_out = self.forward(optics, EM_in)
 		# replacing by known amplitude
@@ -306,3 +307,23 @@ class LanternOptics:
 
 	def linear_reconstruct(self, intensities):
 		return self.command_matrix @ (intensities - self.image_ref)
+
+	def gs_reconstruct(self, intensities, optics, guess=None):
+		lantern_reading = sum(c * lf for (c, lf) in zip(intensities, self.launch_fields))
+		gs_field = self.GS(optics, lantern_reading.ravel(), guess=guess)
+		return optics.zernike_basis.coefficients_for(gs_field.phase)[:self.nmodes]
+
+	def gs_inject_recover(self, zernikes, amplitudes, optics):
+		dm = optics.deformable_mirror
+		dm.flatten()
+		if isinstance(zernikes, int):
+			zernikes = [zernikes]
+		if isinstance(amplitudes, float):
+			amplitudes = [amplitudes]
+		for (z, a) in zip(zernikes, amplitudes):
+			dm.actuators[z] = a * (optics.wl / (4 * np.pi))
+		pupil_wf = dm.forward(optics.wf)
+		psf = optics.focal_propagator(pupil_wf)
+		post_lantern_coeffs = self.lantern_coeffs(psf)
+		intensities = np.abs(post_lantern_coeffs) ** 2
+		return self.gs_reconstruct(intensities, optics)[:self.nmodes]
