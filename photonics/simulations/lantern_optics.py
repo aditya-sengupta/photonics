@@ -70,6 +70,7 @@ class LanternOptics:
 		jl.Flux.loadmodel_b(self.model, model_state)
 		self.ymin, self.ymax = (lambda x: (np.min(x), np.max(x)))(np.abs(np.load(DATA_PATH + "/sim_trainsets/sim_trainset_lanterns_spieeval.npy")) ** 2)
 		self.xmin, self.xmax = (lambda x: (np.min(x), np.max(x)))(np.load(DATA_PATH + "/sim_trainsets/sim_trainset_amplitudes_spieeval.npy"))
+		self.gs_slopes = np.ones(self.nmodes)
 
 	def input_to_2d(self, input_efield, zoomed=True, restore_outside=False):
 		"""
@@ -311,10 +312,11 @@ class LanternOptics:
 	def gs_reconstruct(self, intensities, optics, guess=None):
 		lantern_reading = sum(c * lf for (c, lf) in zip(intensities, self.launch_fields))
 		gs_field = self.GS(optics, lantern_reading.ravel(), guess=guess)
-		return optics.zernike_basis.coefficients_for(gs_field.phase)[:self.nmodes]
+		return optics.zernike_basis.coefficients_for(gs_field.phase)[:self.nmodes] / self.gs_slopes
 
 	def gs_inject_recover(self, zernikes, amplitudes, optics):
 		dm = optics.deformable_mirror
+		act = np.copy(dm.actuators)
 		dm.flatten()
 		if isinstance(zernikes, int):
 			zernikes = [zernikes]
@@ -326,4 +328,9 @@ class LanternOptics:
 		psf = optics.focal_propagator(pupil_wf)
 		post_lantern_coeffs = self.lantern_coeffs(psf)
 		intensities = np.abs(post_lantern_coeffs) ** 2
+		dm.actuators = act
 		return self.gs_reconstruct(intensities, optics)[:self.nmodes]
+
+	def set_gs_slopes(self, optics):
+		gs_slopes = [(self.gs_inject_recover(i, 0.1, optics)[i] - self.gs_inject_recover(i, -0.1, optics)[i]) / (0.2) for i in range(self.nmodes)]
+		self.gs_slopes = np.array(gs_slopes)

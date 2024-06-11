@@ -32,11 +32,12 @@ pyramid = PyramidOptics(optics)
 lantern = LanternOptics(optics)
 corr = partial(correction, optics=optics, pyramid=pyramid, lantern=lantern, f_loop=f_loop, f_cutoff=f_cutoff)
 focus_ncpa = optics.zernike_to_pupil(2, 0.3)
+# lantern.set_gs_slopes(optics)
 # %%
 niter = 100
 second_stage_iter = 20
-D_over_r0s = [16]
-lantern_recons = ["gs"]
+D_over_r0s = [64]
+lantern_recons = ["linear", "gs"]
 strehls_grid = np.zeros((len(D_over_r0s), len(lantern_recons), niter))
 for (i, D_over_r0) in enumerate(D_over_r0s):
     optics.turbulence_setup(fried_parameter=optics.telescope_diameter/D_over_r0, seed=371)
@@ -52,16 +53,13 @@ plt.plot(strehls_grid[0,1,:], label="G-S")
 plt.xlabel("Frame number")
 plt.ylabel("Strehl ratio")
 # %%
-gs_zernikes_over_time = np.array([optics.zernike_basis.coefficients_for(x.phase) for x in twostage_correction["wavefronts_after_dm"]])
-# %%
 lantern_measured_zernikes = np.array(twostage_correction["lantern_readings"])
 # %%
 plt.plot(np.array(twostage_correction["focal_zernikes_truth"])[:,2], label="True focal-plane focus")
-plt.plot(gs_zernikes_over_time[:,2], label="True pupil-plane focus")
 plt.plot(lantern_measured_zernikes[:,2] / (optics.wl / (4 * np.pi)), label="Lantern-reconstructed focal-plane focus")
 plt.legend()
 # %%
-i = 10
+i = 60
 print("truth", twostage_correction["focal_zernikes_truth"][i][:9])
 print("gs", lantern.gs_inject_recover(np.arange(9), twostage_correction["focal_zernikes_truth"][i][:9], optics))
 # %%

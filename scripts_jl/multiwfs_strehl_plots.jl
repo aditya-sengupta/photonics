@@ -5,14 +5,16 @@ using LaTeXStrings
 using StatsBase: mean
 
 gr()
-strehls = npzread("./data/strehls_grid.npy")
+strehls = npzread("./data/strehls_grid_240610.npy")
+strehls_64 = npzread("./data/strehls_grid_240610_64.npy")
+strehls[7,:,:] .= strehls_64[1,:,:]
 times = 0:(1/799):1
 ax = axes(strehls)
 
 default(fontfamily="Computer Modern", linewidth=1.5, framestyle=:box, label=nothing, grid=true)
 
-cmap = Dict(1 => 2, 2 => 3, 3 => 13, 4 => 12, 5 => 11)
-namemap = ["No lantern (NCPA)", "Perfect lantern", "Interaction matrix", "Neural network","Gerchberg-Saxton"]
+cmap = Dict(1 => 2, 2 => 13, 3 => 12, 4 => 11)
+namemap = ["No lantern (NCPA)", "Interaction matrix", "Neural network","Gerchberg-Saxton"]
 
 begin
     pl = []
@@ -23,7 +25,7 @@ begin
         end
         push!(pl, p)
     end
-    push!(pl, plot((1:5)', legend=true, framestyle=:none, label=["No lantern (NCPA)" "Perfect lantern" "Interaction matrix" "Neural network" "Gerchberg-Saxton"], legendfontsize=12, color=[2 3 13 12 11]))
+    push!(pl, plot((1:4)', legend=true, framestyle=:none, label=["No lantern (NCPA)" "Interaction matrix" "Neural network" "Gerchberg-Saxton"], legendfontsize=12, color=[2 13 12 11]))
     pf = plot(pl..., layout=(2,4), size=(900,500), suptitle="Strehl ratio over time (s) for varying reconstructors and atmospheres")
     Plots.savefig("figures/strehl_over_time.pdf")
     pf

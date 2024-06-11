@@ -82,12 +82,7 @@ def correction(
 			elif lantern_recon == "nn":
 				lantern_zernikes_measured = lantern.nn_reconstruct(lantern_reading) * (optics.wl / (4 * np.pi))
 			elif lantern_recon == "gs":
-				"""reading_field = sum(np.abs(c) ** 2 * lf for (c, lf) in zip(lantern_reading, lantern.launch_fields))
-				reading_field = hc.Wavefront(hc.Field(reading_field.ravel(), optics.focal_grid), wavelength=optics.wl)
-				GS_output = lantern.GS(optics, reading_field.intensity, guess=None)
-				GS_phase_screen = GS_output.phase
-				lantern_zernikes_measured = optics.zernike_basis.coefficients_for(GS_phase_screen)[:lantern_filter.n] * optics.wl / (4 * np.pi)"""
-				lantern_zernikes_measured = lantern.gs_reconstruct(lantern_reading, optics)[:lantern_filter.n] * (optics.wl / (4 * np.pi))
+				lantern_zernikes_measured = lantern.gs_inject_recover(np.arange(lantern_filter.n), focal_zernikes_truth[:lantern_filter.n], optics) * (optics.wl / (4 * np.pi))
 			else:
 				lantern_zernikes_measured = lantern.linear_reconstruct(lantern_reading)
 			correction_results["lantern_readings"].append(lantern_zernikes_measured)
