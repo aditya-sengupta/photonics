@@ -4,6 +4,8 @@ using Chain: @chain
 using Flux
 using JLD2
 using StatsBase: mean
+using ColorSchemes
+csch = eval(Meta.parse("ColorSchemes." * string(cvdschemes[53])))
 
 pgfplotsx()
 
@@ -49,10 +51,10 @@ nn_resids_rms = [sqrt(sum(x .^ 2)) for x in eachrow(nn_resids)]
 
 begin
     msv = 2
-    s = scatter(rms_inputs, rms_pyramid, msa=0, ms=msv, label="Modulated pyramid", xlabel="Injected aberration RMS (rad)", ylabel="Reconstruction error RMS (rad)", legend=:topleft, legendfontsize=12, color=14)
-    scatter!(rms_inputs, rms_residuals, msa=0, ms=msv, label="PL linear reconstructor", color=13)
-    scatter!(rms_inputs, nn_resids_rms, msa=0, ms=msv, label="PL neural network", color=12, alpha=0.5)
-    scatter!(rms_inputs, gs_rms_residuals, msa=0, ms=msv, label="PL Gerchberg-Saxton", color=11, alpha=0.5)
+    s = scatter(rms_inputs, rms_pyramid, msa=0, ms=msv, label="Modulated pyramid", xlabel="Injected aberration RMS (rad)", ylabel="Reconstruction error RMS (rad)", legend=:topleft, legendfontsize=12, color=csch[1])
+    scatter!(rms_inputs, rms_residuals, msa=0, ms=msv, label="PL linear reconstructor", color=csch[3])
+    scatter!(rms_inputs, nn_resids_rms, msa=0, ms=msv, label="PL neural network", color=csch[5])
+    scatter!(rms_inputs, gs_rms_residuals, msa=0, ms=msv, label="PL Gerchberg-Saxton", color=csch[7])
     Plots.savefig("figures/nonlinear_recon.pdf")
     s
 end

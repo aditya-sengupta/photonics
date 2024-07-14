@@ -1,5 +1,4 @@
 using Plots
-pgfplotsx()
 
 plot_font = "Computer Modern"
 default(fontfamily=plot_font,
