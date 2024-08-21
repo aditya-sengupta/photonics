@@ -40,14 +40,15 @@ class LanternOptics:
 			for pos in self.lant.init_core_locs
 		]
 		self.plotting_launch_fields = [
-			lb.normalize(lb.lpfield(self.xg-pos[0], self.yg-pos[1], 0, 1, 5 * self.rcore, self.wl*1e6, self.ncore, self.nclad))
+			lb.normalize(lb.lpfield(self.xg-pos[0], self.yg-pos[1], 0, 1, 8 * self.rcore, self.wl*1e6, self.ncore, self.nclad))
 			for pos in self.lant.init_core_locs
 		]
 		self.lbprop = lb.Prop3D(self.wl*1e6, self.mesh, self.lant, self.nclad)
 		self.lantern_basis = np.array([lf.ravel() for lf in self.launch_fields]).T
 		self.lantern_reverse = np.linalg.inv(self.lantern_basis.T @ self.lantern_basis) @ self.lantern_basis.T
-		out = np.zeros_like(self.xg)
-		self.lant.set_IORsq(out, self.z_ex)
+		self.out = np.zeros_like(self.xg)
+		self.lant.set_IORsq(self.out, self.z_ex)
+		out = self.out
 		# out = out[self.mesh.PML:-self.mesh.PML,self.mesh.PML:-self.mesh.PML]
 		self.input_footprint = np.where(out[self.mesh.PML:-self.mesh.PML,self.mesh.PML:-self.mesh.PML] >= self.nclad ** 2)
 		self.complement_mask = np.ones_like(out, dtype=bool)
