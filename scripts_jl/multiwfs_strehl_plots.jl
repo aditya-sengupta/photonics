@@ -20,6 +20,7 @@ begin
     pl = []
     for i in ax[1]
         p = plot(ylim=(0,1), title=L"$D/r_0$" * "= $(2^(i-1))", legend=false)
+        vline!()
         for j in ax[2]
             plot!(times, strehls[i,j,:], color=cmap[j], alpha=(j == 5 ? 0.5 : 1))
         end

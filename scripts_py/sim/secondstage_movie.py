@@ -28,21 +28,19 @@ optics = Optics(lantern_fnumber=6.5, dm_basis="modal")
 pyramid = PyramidOptics(optics)
 lantern = LanternOptics(optics)
 corr = partial(correction, optics=optics, pyramid=pyramid, lantern=lantern, f_loop=f_loop, f_cutoff=f_cutoff)
-focus_ncpa = optics.zernike_to_pupil(2, 0.3)
+# %%
+focus_ncpa = optics.zernike_to_pupil(2, 0.5)
 
 # %%
-niter = 100
-second_stage_iter = 20
-D_over_r0s = [32]
-lantern_recons = ["none", "linear", "nn", "gs"]
-strehls_grid = np.zeros((len(D_over_r0s), len(lantern_recons), niter))
-for (i, D_over_r0) in enumerate(D_over_r0s):
-    optics.turbulence_setup(fried_parameter=optics.telescope_diameter/D_over_r0, seed=1)
-    for (j, lantern_recon) in enumerate(lantern_recons):
-        print(f"D/r0 = {D_over_r0}, {lantern_recon}")
-        use_lantern = (lantern_recon != "none")
-        twostage_correction = corr(use_pyramid=True, use_lantern=use_lantern, num_iterations=niter, ncpa=focus_ncpa, pyramid_recon="linear", lantern_recon=lantern_recon, second_stage_iter=second_stage_iter)
-        strehls_grid[i,j,:] = twostage_correction["strehl_ratios"]
+niter = 200
+second_stage_iter = 100
+optics.turbulence_setup(fried_parameter=optics.telescope_diameter/4, seed=371)
+twostage_correction = corr(use_pyramid=True, use_lantern=True, num_iterations=niter, ncpa=focus_ncpa, pyramid_recon="linear", lantern_recon="nn", second_stage_iter=second_stage_iter)
 
-np.save(DATA_PATH + f"/strehls_grid_{date_now()}_64.npy", strehls_grid)
+# %%
+psfs = np.array([x.intensity.shaped for x in twostage_correction["point_spread_functions"]])
+np.save(DATA_PATH + "/multiwfs_psfs.npy", psfs)
+# %%
+sr = twostage_correction["strehl_ratios"]
+np.save(DATA_PATH + "/multiwfs_anim_strehls.npy", sr)
 # %%
