@@ -1,6 +1,9 @@
 using Plots
 using NPZ
 default(fontfamily= "Computer Modern", linewidth=3, framestyle=:box, label=nothing, grid=true)
+using ColorSchemes
+cvdschemes = findcolorscheme("cvd")
+csch = eval(Meta.parse("ColorSchemes." * string(cvdschemes[53])))
 mode_names = ["x-tilt", "y-tilt", "astig", "focus", "astig45", "tricoma", "tricoma60", "coma", "coma90", "z10", "z11", "z12", "z13", "z14", "z15", "z16", "z17", "z18"]
 
 amps = npzread("data/sweep_testset_amplitudes_.npy")
@@ -13,14 +16,14 @@ begin
     nmodes = 9
     pl = []
     for k in 1:nmodes
-        pk = plot(xlabel=mode_names[k], legend=:bottomright, aspect_ratio=:equal, xlim=(-1,1), ylim=(-1,1))
+        pk = plot(xlabel=mode_names[k], legend=:topright, aspect_ratio=:equal, xlim=(-1,1), ylim=(-1,1), legendfontsize=25)
         plot!(amps, amps, ls=:dash, color=:black)
         for (i, (s, n)) in enumerate(zip([sweep_mpwfs, sweep_linear, sweep_nn, sweep_gs], ["Modulated pyramid", "PL linear reconstructor", "PL neural network", "PL Gerchberg-Saxton"]))
-            plot!(amps, s[k,:,k], color=15-i, label=(k == 3 ? n : nothing))
+            plot!(amps, s[k,:,k], color=csch[2i-1], label=nothing)
         end
         push!(pl, pk)
     end
     p = plot(pl..., size=(1000,1000), dpi=600, suptitle="All PL reconstruction algorithms compared with the modulated pyramid")
-    Plots.savefig("figures/all_recon.pdf")
+    Plots.savefig("figures/all_recon_spiepres.pdf")
     p
 end

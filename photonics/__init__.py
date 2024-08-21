@@ -7,3 +7,4 @@ plt.rcParams.update({
     "font.serif" : "cmr10",
     "axes.formatter.use_mathtext" : True
 })
+

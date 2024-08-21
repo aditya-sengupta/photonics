@@ -30,6 +30,9 @@ def datetime_now():
 def rms(x):
     return np.sqrt(np.mean((x - np.mean(x)) ** 2))
 
+def rms_aperture(x, aperture):
+    return rms(x[aperture != 0.0])
+
 def datetime_ms_now():
     dt = datetime.now()
     return dt.strftime('%Y%m%d')[2:] + "_" + dt.strftime('%H%M%S') + "_" + str(dt.microsecond)

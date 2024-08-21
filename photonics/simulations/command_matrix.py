@@ -33,11 +33,12 @@ def make_command_matrix(
                 dm.actuators = amp
                 dm_wf = dm.forward(flat_wavefront)
                 image = wfs.readout(dm_wf)
-                slope += s * (image - wfs.image_ref)/(2 * probe_amp)
+                # image = image / np.sum(image)
+                slope += s * image/(2 * probe_amp)
 
             slopes.append(slope)
 
         slopes = hc.ModeBasis(slopes)
         wfs.interaction_matrix = slopes.transformation_matrix
         wfs.command_matrix = hc.inverse_tikhonov(slopes.transformation_matrix, rcond=1e-3, svd=None)
-        np.save(cmd_path, wfs.command_matrix)
+        # np.save(cmd_path, wfs.command_matrix)

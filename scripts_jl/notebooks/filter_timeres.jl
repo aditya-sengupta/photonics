@@ -74,10 +74,13 @@ begin
 end
 
 # ╔═╡ c04778a1-6a28-4de5-a0f7-a52c900e6ad8
+# ╠═╡ disabled = true
+#=╠═╡
 begin
 	plot(t[1:Nplot], cLn[1:Nplot] + cHn[1:Nplot], label="Summed signal", xlabel="Time (s)", ylabel="Signal", dpi=600, title="Applied freq = $f_appl Hz, cutoff freq = $f_cutoff Hz")
 	plot!(t[1:Nplot], cn[1:Nplot], alpha=0.5, label="Original total signal")
 end
+  ╠═╡ =#
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -96,7 +99,7 @@ PlutoUI = "~0.7.59"
 PLUTO_MANIFEST_TOML_CONTENTS = """
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.10.3"
+julia_version = "1.10.4"
 manifest_format = "2.0"
 project_hash = "50d153a69ec909f029f4191858e39538930f3c46"
 

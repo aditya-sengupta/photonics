@@ -11,3 +11,4 @@ meep
 __pycache__
 references/
 *.mp4
+figures/psf_cl.gif
