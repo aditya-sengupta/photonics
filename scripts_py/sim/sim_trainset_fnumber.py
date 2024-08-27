@@ -8,13 +8,15 @@ if "CONDA_PREFIX" in os.environ:
 import numpy as np
 from tqdm import tqdm
 from os import path
+from hcipy import Wavefront, Field, NoisyDetector
 from photonics.utils import DATA_PATH
 from photonics.simulations.optics import Optics
 from photonics.simulations.lantern_optics import LanternOptics
+from photonics.utils import date_now, time_now
 
 optics = Optics(lantern_fnumber=6.5, dm_basis="modal")
 lo = LanternOptics(optics)
-nzern = 9
+nzern = 19
 N = 60_000
 ntrain = 4 * N // 5
 ntest = N - ntrain
@@ -30,7 +32,10 @@ for (setname, nv) in zip(["train", "test"], [ntrain, ntest]):
 # %%
 dm = optics.deformable_mirror
 dm.flatten()
+lfs = [np.abs(l).flatten() for l in lo.launch_fields]
+# %%
 for fnumber in range(3, 12):
+    print(fnumber)
     optics = Optics(lantern_fnumber=fnumber, dm_basis="modal")
     lo = LanternOptics(optics)
     for (setname, nv) in zip(["train", "test"], [ntrain, ntest]):
@@ -40,9 +45,14 @@ for fnumber in range(3, 12):
             dm.actuators[:nzern] = c * (optics.wl / (4 * np.pi))
             pupil_wf = dm.forward(optics.wf)
             focal_wf = optics.focal_propagator.forward(pupil_wf)
-            lantern_coeffs[i] = lo.lantern_coeffs(focal_wf)
+            coeffs_true, pl_image = lo.lantern_output(focal_wf)
+            pl_wf = Wavefront(Field(pl_image.flatten(), lo.focal_grid), wavelength=optics.wl)
+            detector = NoisyDetector(detector_grid=lo.focal_grid)
+            detector.integrate(pl_wf, 1e4)
+            measurement = detector.read_out()
+            lantern_coeffs[i] = np.array([np.sum(measurement * l) for l in lfs])
 
-        np.save(path.join(DATA_PATH, f"sim_trainsets/sim_{setname}set_amplitudes_fnumber_{fnumber}.npy"), zamps)
-        np.save(path.join(DATA_PATH, f"sim_trainsets/sim_{setname}set_lanterns_fnumber_{fnumber}_dt_{date_now()}{time_now()}.npy"), lantern_coeffs)
+        np.save(path.join(DATA_PATH, f"sim_trainsets/fnumber/sim_{setname}set_amplitudes_fnumber_{fnumber}_date_{date_now()}.npy"), zamps_v)
+        np.save(path.join(DATA_PATH, f"sim_trainsets/fnumber/sim_{setname}set_lanterns_fnumber_{fnumber}_date_{date_now()}.npy"), lantern_coeffs)
 
 # %%

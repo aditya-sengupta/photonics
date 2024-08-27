@@ -2,7 +2,7 @@
 
 julia_version = "1.10.4"
 manifest_format = "2.0"
-project_hash = "022b2f9703517b6e28ea9eeae111ecc303073c95"
+project_hash = "1f238a45869048706898bab56df76b5d0c98d4a4"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "016833eb52ba2d6bea9fcb50ca295980e728ee24"
@@ -963,6 +963,12 @@ git-tree-sha1 = "eb8fed28f4994600e29beef49744639d985a04b2"
 uuid = "3e5b6fbb-0976-4d2c-9146-d79de83f2fb0"
 version = "0.1.16"
 
+[[deps.Hwloc_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "5e19e1e4fa3e71b774ce746274364aef0234634e"
+uuid = "e33a78d0-f292-5ffc-b300-72abe9b543c8"
+version = "2.11.1+0"
+
 [[deps.HypergeometricFunctions]]
 deps = ["DualNumbers", "LinearAlgebra", "OpenLibm_jll", "SpecialFunctions"]
 git-tree-sha1 = "f218fe3736ddf977e0e772bc9a586b2383da2685"
@@ -1586,6 +1592,38 @@ git-tree-sha1 = "b45738c2e3d0d402dffa32b2c1654759a2ac35a4"
 uuid = "f1d291b0-491e-4a28-83b9-f70985020b54"
 version = "0.4.4"
 
+[[deps.MPI]]
+deps = ["Distributed", "DocStringExtensions", "Libdl", "MPICH_jll", "MPIPreferences", "MPItrampoline_jll", "MicrosoftMPI_jll", "OpenMPI_jll", "PkgVersion", "PrecompileTools", "Requires", "Serialization", "Sockets"]
+git-tree-sha1 = "14cef41baf5b675b192b02a22c710f725ab333a7"
+uuid = "da04e1cc-30fd-572f-bb4f-1f8673147195"
+version = "0.20.20"
+
+    [deps.MPI.extensions]
+    AMDGPUExt = "AMDGPU"
+    CUDAExt = "CUDA"
+
+    [deps.MPI.weakdeps]
+    AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
+    CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+
+[[deps.MPICH_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "Hwloc_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "MPIPreferences", "TOML"]
+git-tree-sha1 = "19d4bd098928a3263693991500d05d74dbdc2004"
+uuid = "7cb0a576-ebde-5e09-9194-50597f1243b4"
+version = "4.2.2+0"
+
+[[deps.MPIPreferences]]
+deps = ["Libdl", "Preferences"]
+git-tree-sha1 = "c105fe467859e7f6e9a852cb15cb4301126fac07"
+uuid = "3da0fdf6-3ccc-4f1b-acd9-58baa6c99267"
+version = "0.1.11"
+
+[[deps.MPItrampoline_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "MPIPreferences", "TOML"]
+git-tree-sha1 = "8c35d5420193841b2f367e658540e8d9e0601ed0"
+uuid = "f1f71cc9-e9ae-5b93-9b94-4fe0e1ad3748"
+version = "5.4.0+0"
+
 [[deps.MacroTools]]
 deps = ["Markdown", "Random"]
 git-tree-sha1 = "2fa9ee3e63fd3a4f7a9a4f4744a52f4856de82df"
@@ -1663,6 +1701,12 @@ deps = ["Pkg", "Scratch", "micromamba_jll"]
 git-tree-sha1 = "011cab361eae7bcd7d278f0a7a00ff9c69000c51"
 uuid = "0b3b1443-0f03-428d-bdfb-f27f9c1191ea"
 version = "0.1.14"
+
+[[deps.MicrosoftMPI_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "f12a29c4400ba812841c6ace3f4efbb6dbb3ba01"
+uuid = "9237b28f-5490-5468-be7b-bb81f5f5e6cf"
+version = "10.1.4+2"
 
 [[deps.Missings]]
 deps = ["DataAPI"]
@@ -1850,6 +1894,12 @@ version = "2.5.2+0"
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
 version = "0.8.1+2"
+
+[[deps.OpenMPI_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "MPIPreferences", "TOML"]
+git-tree-sha1 = "e25c1778a98e34219a00455d6e4384e017ea9762"
+uuid = "fe0851c0-eecd-5654-98d4-656369965a5c"
+version = "4.1.6+0"
 
 [[deps.OpenSSL]]
 deps = ["BitFlags", "Dates", "MozillaCACerts_jll", "OpenSSL_jll", "Sockets"]
