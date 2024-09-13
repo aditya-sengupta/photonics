@@ -20,11 +20,15 @@ class Optics:
 		num_airy = self.mesh_extent * 1e-6 / (2 * spatial_resolution) # number of resolution elements
 		num_px = 2 * q * num_airy
 		self.focal_grid = hc.make_focal_grid(q=q, num_airy=num_airy, spatial_resolution=spatial_resolution)
-		while self.focal_grid.shape[0] < self.mesh_extent + 1:
+		while self.focal_grid.shape[0] != self.mesh_extent + 1:
 			# For some reason the math here is sometimes inexact
-			# So we expand until we match the lightbeam grid
-			num_airy *= (num_px + 1) / num_px
-			num_px += 1
+			# So we expand/contract until we match the lightbeam grid
+			if self.focal_grid.shape[0] > self.mesh_extent + 1:
+				num_airy *= (num_px + 1) / num_px
+				num_px += 1
+			else:
+				num_airy *= num_px / (num_px - 1)
+				num_px -= 1
 			self.focal_grid = hc.make_focal_grid(q=q, num_airy=num_airy, spatial_resolution=spatial_resolution)
 		self.focal_propagator = hc.FraunhoferPropagator(self.pupil_grid, self.focal_grid, focal_length=(self.lantern_fnumber * self.telescope_diameter))
 		self.wf = hc.Wavefront(self.aperture, wavelength=self.wl)

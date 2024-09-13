@@ -60,8 +60,8 @@ class LanternOptics:
 		self.focal_propagator = optics.focal_propagator
 		self.focal_grid = optics.focal_grid
 		self.input_ref = optics.im_ref
-		make_command_matrix(optics.deformable_mirror, self, optics.wf, probe_amp=1.2e-8, rerun=False)
-		model_fname = "pl_nn_spieeval"
+		# make_command_matrix(optics.deformable_mirror, self, optics.wf, probe_amp=1.2e-8, rerun=False)
+		"""model_fname = "pl_nn_spieeval"
 		model_state = jl.JLD2.load(DATA_PATH + f"/pl_nn/{model_fname}.jld2", "model_state")
 		self.model = jl.Chain(
 			jl.Dense(19, 2000, jl.relu),
@@ -70,7 +70,7 @@ class LanternOptics:
 		)
 		jl.Flux.loadmodel_b(self.model, model_state)
 		self.ymin, self.ymax = (lambda x: (np.min(x), np.max(x)))(np.abs(np.load(DATA_PATH + "/sim_trainsets/sim_trainset_lanterns_spieeval.npy")) ** 2)
-		self.xmin, self.xmax = (lambda x: (np.min(x), np.max(x)))(np.load(DATA_PATH + "/sim_trainsets/sim_trainset_amplitudes_spieeval.npy"))
+		self.xmin, self.xmax = (lambda x: (np.min(x), np.max(x)))(np.load(DATA_PATH + "/sim_trainsets/sim_trainset_amplitudes_spieeval.npy"))"""
 		self.gs_slopes = np.ones(self.nmodes)
 
 	def input_to_2d(self, input_efield, zoomed=True, restore_outside=False):

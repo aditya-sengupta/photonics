@@ -8,11 +8,11 @@ from photonics.simulations.pyramid_optics import PyramidOptics
 
 optics = Optics(lantern_fnumber=6.5, dm_basis="modal")
 pyramid = PyramidOptics(optics)
-gain = 0.3
+gain = 0.2
 leakage = 0.999
 dt=1./800
 
-num_iterations = 200 #number of time steps in our simulation. We'll run for a total of dt*num_iterations seconds
+num_iterations = 800 #number of time steps in our simulation. We'll run for a total of dt*num_iterations seconds
 sr = [] # so we can find the average strehl ratio
 wavefronts_after_dm = []
 
