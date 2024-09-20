@@ -48,7 +48,9 @@ def onclick(event):
 	return coords
 
 pattern = hexagon_pattern(3, 20) * 5 + 250
-test_image = sum(gaussian_2d(lant.xi, lant.yi, xc, yc, 20) for (xc, yc) in pattern)
+lant.dark = 0
+lant.exp_ms = 1000
+test_image = lant.get_image()
 accepted_positions = False
 while not accepted_positions:
 	test_image_ret = test_image

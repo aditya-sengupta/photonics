@@ -3,7 +3,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from scipy.stats import linregress
 
-from photonics import LanternReader
+from photonics.experiments.lantern_reader import LanternReader
 # %%
 reader = LanternReader(
     nports = 18, 
@@ -23,8 +23,7 @@ plt.plot(times, peaks)
 saturation_indices = np.argmax(peaks, axis=0)
 saturation_times = times[saturation_indices]
 # %%
-darks = np.load(reader.filepath("expdarks"))
-dark_intensities = np.array([reader.get_intensities(darks[i]) for i in range(darks.shape[0])])
+darks_intensities = np.load(reader.filepath("dark_intensities"))
 # %%
 plt.plot(times[1:], averages[1:])
 linear_fits = [linregress(times[1:saturation_indices[i]], (averages + dark_intensities)[1:saturation_indices[i],i]) for i in range(18)]

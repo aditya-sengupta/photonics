@@ -25,7 +25,7 @@ def time_now():
     return datetime.now().strftime("%H%M")
 
 def datetime_now():
-    return datetime.now().isoformat()
+    return datetime.now().isoformat().replace(":", ".")
 
 def rms(x):
     return np.sqrt(np.mean((x - np.mean(x)) ** 2))
