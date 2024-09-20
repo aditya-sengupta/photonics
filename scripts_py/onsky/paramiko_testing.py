@@ -8,6 +8,8 @@ import Xlib.support.connect as xlib_connect
 
 
 local_x11_display = xlib_connect.get_display(os.environ['DISPLAY'])
+local_x11_display = list(local_x11_display)
+local_x11_display[1] = None
 local_x11_socket = xlib_connect.get_socket(*local_x11_display[:4])
 
 
