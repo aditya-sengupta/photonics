@@ -50,6 +50,7 @@ def onclick(event):
 pattern = hexagon_pattern(3, 20) * 5 + 250
 lant.dark = 0
 lant.exp_ms = 1000
+lant.gain = 18
 test_image = lant.get_image()
 accepted_positions = False
 while not accepted_positions:

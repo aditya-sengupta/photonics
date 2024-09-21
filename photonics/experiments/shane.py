@@ -70,7 +70,7 @@ class ShaneLantern:
             intensities[i] = np.sum(img[self.masks[i]])
             j += 1
 
-        return intensities
+        return normalize(intensities)
 
     def reconstruct_image(self, img, intensities):
         recon_image = np.zeros_like(img)
@@ -100,7 +100,7 @@ class ShaneLantern:
             sleep(self.exp_ms / 1000)
 
         self.dark = np.mean(darks, axis=0)
-        self.save(f"dark_exptime_ms_{self.exp_ms}_gain_{self.gain}", self.dark)
+        self.save(f"dark_exptime_ms_{self.exp_ms}_gain_{self.gain}_onsky2", self.dark)
   
     def measure_pl_flat(self):
         self.send_zeros(verbose=True)
@@ -112,7 +112,10 @@ class ShaneLantern:
         return float(self.ditshm.get_data()[0][0] / 1000)
 
     @exp_ms.setter
-    def exp_ms(self, val, remind=True):
+    def exp_ms(self, val):
+        self.set_exp_ms(val)
+            
+    def set_exp_ms(self, val, remind=True):
         assert val > 0, "invalid value for exp_ms"
         val = float(val)
         self.ditshm.set_data(self.ditshm.get_data() * 0 + val * 1000)
@@ -167,7 +170,7 @@ class ShaneLantern:
             The amplitude of each mode in [1, 2, ..., Nmodes], in order.
         """
         assert len(self.curr_dmc) == self.Nmodes, "wrong number of modes specified"
-        assert np.all(np.abs(self.curr_dmc) <= 5.0), "sending out-of-bounds amplitudes"
+        assert np.all(np.abs(self.curr_dmc) <= 1.0), "sending out-of-bounds amplitudes"
         command = ",".join(map(str, self.curr_dmc))
         if verbose:
             print(f"DMC {command}.")
@@ -179,9 +182,9 @@ class ShaneLantern:
         """
         Get an image off the lantern camera. 
         """
-        # sleep(np.float64(self.exp_ms) / 1e3)
         frames = []
         for i in range(self.nframes):
+            sleep(np.float64(self.exp_ms) / 1e3)
             frames.append(self.im.get_data(check=True).astype(float) - self.dark)
 
         return np.mean(frames, axis=0)
@@ -223,7 +226,7 @@ class ShaneLantern:
     def save_current_image(self, tag=""):
         self.save(f"pl_image_{datetime_now()}_{tag}", self.get_image())
 
-    def make_interaction_matrix(self, amp_calib=0.005, thres=1/30, nm=None):
+    def make_interaction_matrix(self, amp_calib=0.01, thres=1/30, nm=None):
         if nm is None:
             nm = self.Nmodes
         self.int_mat = np.zeros((self.Nports, nm))
@@ -335,14 +338,14 @@ class ShaneLantern:
     def exptime_sweep(self, exp_ms_values, tag=""):
         sweep_values = []
         for exp_ms in exp_ms_values:
-            self.exp_ms(exp_ms, remind=False)
+            self.exp_ms = exp_ms
             sweep_values.append(self.get_intensities(self.get_image()))
         
         sweep_values = np.array(sweep_values)
         with h5py.File(self.filepath(f"{tag}_sweep_{datetime_now()}", ext="hdf5"), "w") as f:
             exp_ms_dset = f.create_dataset("exp_ms", data=exp_ms_values)
             exp_ms_dset.attrs["gain"] = self.gain
-            img_dset = f.create_dataset(f"{tag}_sweep_readout", data=dark_sweep_values)
+            img_dset = f.create_dataset(f"{tag}_sweep_readout", data=sweep_values)
             img_dset.attrs["nframes"] = self.nframes
             img_dset.attrs["dark_subtracted"] = "false"
 
