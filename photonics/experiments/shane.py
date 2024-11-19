@@ -2,6 +2,7 @@ import os
 from os import path
 import subprocess
 import numpy as np
+from itertools import product
 from functools import reduce
 from time import sleep, time
 from tqdm import tqdm, trange
@@ -258,6 +259,13 @@ class ShaneLantern:
             cmdmat_dset.attrs["thres"] = thres
    
         self.send_zeros()
+        
+    def load_interaction_matrix(self, fname):
+        with h5py.File(fname) as f:
+            self.exp_ms = f["intmat"].attrs["exp_ms"]
+            self.gain = f["intmat"].attrs["gain"]
+            self.int_mat = np.array(f["intmat"])
+            self.cmd_mat = np.array(f["cmdmat"])
 
     def pseudo_cl_iteration(self, gain=0.1, verbose=True):
         dm_start = np.copy(self.curr_dmc)
@@ -300,8 +308,17 @@ class ShaneLantern:
             f.create_dataset("lantern_readings", data=np.array(lantern_readings))
 
         return dmcs, lantern_readings
+    
+    def closed_loop_replay(self, fname):
+        with h5py.File(fname) as f:
+            dmcs = np.array(f["dmcs"])
+        for (i, dmc) in enumerate(dmcs):
+            self.curr_dmc = dmc
+            self.command_to_dm()
+            # I don't have programmatic access to the PSF camera, so I'll just wait for user input
+            input(f"Frame {i}.")
 
-    def make_linearity(self, min_amp=-1.0, max_amp=1.0, step=0.1):
+    def make_linearity(self, min_amp=-0.06, max_amp=0.06, step=0.01):
         all_recon = []
         amps = None
         for z in range(1, self.Nmodes+1):
@@ -367,3 +384,12 @@ class ShaneLantern:
         patterns = np.tile(self.curr_dmc, (n_pictures,1))
         self.openloop_experiment(patterns, tag="stability", delay=wait_s)
         
+    def focus_astig_cube_sweep(self):
+        # NOT writing this to generalize to higher orders or further out because dear god no
+        patterns = np.zeros((13**3, self.Nmodes))
+        amps_per_mode = np.arange(-0.06, 0.07, 0.01)
+        for (i, pattern) in enumerate(product(amps_per_mode, amps_per_mode, amps_per_mode)):
+            patterns[i,:3] = pattern
+            
+        self.openloop_experiment(patterns, tag="focus_astig_cube_sweep")
+            

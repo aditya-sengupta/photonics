@@ -8,7 +8,7 @@ if "CONDA_PREFIX" in os.environ:
 import numpy as np
 from tqdm import tqdm
 from os import path
-from hcipy import Wavefront, Field, NoisyDetector
+from hcipy import Wavefront, Field, NoisyDetector, imshow_field
 from photonics.utils import DATA_PATH
 from photonics.simulations.optics import Optics
 from photonics.simulations.lantern_optics import LanternOptics
