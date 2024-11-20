@@ -51,6 +51,19 @@ class ShaneLantern:
         self.save_full_frame = False
 
         print(f"Path for data saving set to {self.directory}")
+    
+    def setup_paramiko(self):
+        import paramiko
+        host = "karnak.ucolick.org"
+        username = "user"
+        password = "yam != spud"
+
+        self.client = paramiko.client.SSHClient()
+        self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        self.client.connect(host, username=username, password=password)
+        
+    def destroy_paramiko(self):
+        self.client.close()
   
     def set_centroids(self, centroids, save=True):
         self.centroids = centroids
@@ -117,6 +130,7 @@ class ShaneLantern:
         self.set_exp_ms(val)
             
     def set_exp_ms(self, val, remind=True):
+        # TODO don't overwrite previous darks
         assert val > 0, "invalid value for exp_ms"
         val = float(val)
         self.ditshm.set_data(self.ditshm.get_data() * 0 + val * 1000)
@@ -176,8 +190,9 @@ class ShaneLantern:
         if verbose:
             print(f"DMC {command}.")
         #warnings.warn("If you see this and you're at Lick, uncomment the lines defining and running shell_command.")
-        shell_command = ["ssh", "-Y", "user@karnak.ucolick.org", "/home/user/ShaneAO/shade/imageSharpen", "-s", command]
-        subprocess.run(shell_command)
+        self.client.exec_command(f"/home/user/ShaneAO/shade/imageSharpen_nogui -s {command}")
+        #shell_command = ["ssh", "-Y", "user@karnak.ucolick.org", "/home/user/ShaneAO/shade/imageSharpen_nogui", "-s", command]
+        #subprocess.run(shell_command)
     
     def get_image(self):
         """
@@ -191,18 +206,22 @@ class ShaneLantern:
         return np.mean(frames, axis=0)
 
     def send_zeros(self, verbose=True):
+        self.setup_paramiko()
         self.curr_dmc[:] = 0.0
         if verbose:
             print("Sending zeros.")
         self.command_to_dm(verbose=False)
+        self.destroy_paramiko()
 
     def openloop_experiment(self, patterns, tag="openloop_experiment", delay=0):
+        self.setup_paramiko()
         start_stamp = datetime_ms_now()
         self.send_zeros(verbose=False)
         img = self.get_image()
         start_time_stamp = time_ms_now()
         bbox_shape = self.get_image().shape
         pl_readout = np.zeros((len(patterns), *bbox_shape))
+        
         for (i, p) in enumerate(tqdm(patterns)):
             self.curr_dmc = p
             self.command_to_dm(verbose=False)
@@ -222,12 +241,14 @@ class ShaneLantern:
             pl_intensities_dataset.attrs["nframes"] = self.nframes
             pl_intensities_dataset.attrs["centroids_dt"] = self.centroids_dt
 
+        self.destroy_paramiko()
         return pl_intensities
 
     def save_current_image(self, tag=""):
         self.save(f"pl_image_{datetime_now()}_{tag}", self.get_image())
 
     def make_interaction_matrix(self, amp_calib=0.01, thres=1/30, nm=None):
+        self.setup_paramiko()
         if nm is None:
             nm = self.Nmodes
         self.int_mat = np.zeros((self.Nports, nm))
@@ -259,6 +280,7 @@ class ShaneLantern:
             cmdmat_dset.attrs["thres"] = thres
    
         self.send_zeros()
+        self.destroy_paramiko()
         
     def load_interaction_matrix(self, fname):
         with h5py.File(fname) as f:
@@ -318,10 +340,12 @@ class ShaneLantern:
             # I don't have programmatic access to the PSF camera, so I'll just wait for user input
             input(f"Frame {i}.")
 
-    def make_linearity(self, min_amp=-0.06, max_amp=0.06, step=0.01):
+    def make_linearity(self, min_amp=-0.06, max_amp=0.06, step=0.01, nmodes=None):
+        if nmodes is None:
+            nmodes = self.Nmodes
         all_recon = []
         amps = None
-        for z in range(1, self.Nmodes+1):
+        for z in range(1, nmodes+1):
             print(f"probing {zernike_names[z+1]}")
             amps, responses = self.sweep_mode(z, min_amp=min_amp, max_amp=max_amp, step=step)
             reconstructed = [self.cmd_mat @ (r - self.pl_flat) for r in responses]
@@ -384,6 +408,29 @@ class ShaneLantern:
         patterns = np.tile(self.curr_dmc, (n_pictures,1))
         self.openloop_experiment(patterns, tag="stability", delay=wait_s)
         
+    def stability_better(self, n_pictures=20, wait_s=2):
+        start_stamp = datetime_ms_now()
+        img = self.get_image()
+        start_time_stamp = time_ms_now()
+        bbox_shape = self.get_image().shape
+        pl_readout = np.zeros((n_pictures, *bbox_shape))
+        for i in trange(n_pictures):
+            sleep(wait_s)
+            img = self.get_image()
+            pl_readout[i] = img
+        
+        pl_intensities = np.array(list(map(self.get_intensities, pl_readout)))
+        with h5py.File(self.filepath(f"stability_{datetime_now()}", ext="hdf5"), "w") as f:
+            if self.save_full_frame:
+                f.create_dataset("pl_images", data=pl_readout)
+            pl_intensities_dataset = f.create_dataset("pl_intensities", data=pl_intensities)
+            pl_intensities_dataset.attrs["exp_ms"] = self.exp_ms
+            pl_intensities_dataset.attrs["gain"] = self.gain
+            pl_intensities_dataset.attrs["nframes"] = self.nframes
+            pl_intensities_dataset.attrs["centroids_dt"] = self.centroids_dt
+
+        return pl_intensities
+        
     def focus_astig_cube_sweep(self):
         # NOT writing this to generalize to higher orders or further out because dear god no
         patterns = np.zeros((13**3, self.Nmodes))
@@ -391,5 +438,5 @@ class ShaneLantern:
         for (i, pattern) in enumerate(product(amps_per_mode, amps_per_mode, amps_per_mode)):
             patterns[i,:3] = pattern
             
-        self.openloop_experiment(patterns, tag="focus_astig_cube_sweep")
+        self.openloop_experiment(patterns, tag="focus_astig_cube_sweep", delay=0.3)
             
