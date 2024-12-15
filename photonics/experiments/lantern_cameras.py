@@ -2,6 +2,9 @@ from abc import ABC
 import numpy as np
 import dao
 
+from ..simulations.optics import Optics
+from ..simulations.lantern_optics import LanternOptics
+
 class LanternCamera(ABC):
     def set_centroids(self, centroids, image, save=False):
         """
@@ -93,12 +96,13 @@ class Goldeye(LanternCamera):
   
     @property
     def fps(self):
-        return self.fps.get_data()
+        return self.fpsshm.get_data()
 
     @fps.setter
     def set_fps(self, val):
         self.fpsshm.set_data(self.fps.get_data() * 0 + val)
         
-class SimLanternCamera(LanternCamera):
+class SimulatedLanternCamera(LanternCamera):
     def __init__(self):
-        pass
+        self.optics = Optics()
+        self.lantern_optics = LanternOptics(optics)

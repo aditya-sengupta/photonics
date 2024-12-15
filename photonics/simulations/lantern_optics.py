@@ -335,3 +335,4 @@ class LanternOptics:
 	def set_gs_slopes(self, optics):
 		gs_slopes = [(self.gs_inject_recover(i, 0.1, optics)[i] - self.gs_inject_recover(i, -0.1, optics)[i]) / (0.2) for i in range(self.nmodes)]
 		self.gs_slopes = np.array(gs_slopes)
+  

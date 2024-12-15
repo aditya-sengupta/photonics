@@ -110,6 +110,3 @@ def plot_linearity(amplitudes, responses, title_mod="", savepath="", zlabels=Non
 	else:
 		print("Not saving this figure, specify 'savepath' if desired!")
  
-def linearity_loss(amplitudes, linearity_responses):
-    comparison = np.eye(linearity_responses.shape[2])[:, np.newaxis, :]
-    return np.sum((comparison * amplitudes[np.newaxis, :, np.newaxis] - linearity_responses) ** 2)
