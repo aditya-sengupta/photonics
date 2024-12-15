@@ -4,6 +4,7 @@ import os
 from os import path
 from copy import copy
 from hcipy import Field, imshow_field
+from scipy.spatial import ConvexHull
 
 PROJECT_ROOT = path.dirname(path.dirname(path.abspath(__file__)))
 DATA_PATH = path.join(PROJECT_ROOT, "data")
@@ -71,3 +72,42 @@ def norm(a, b):
 
 def corr(a, b):
     return np.abs(norm(a, b)) / np.sqrt(norm(a, a) * norm(b, b))
+
+def center_of_mass(img, indices_x, indices_y):
+    # Returns the center of mass (intensity-weighted sum) in the x and y direction of the image.
+    xc = np.sum(img * indices_x) / np.sum(img)
+    yc = np.sum(img * indices_y) / np.sum(img)
+    return xc, yc
+
+
+def ports_in_radial_order(points):
+    xnew, ynew = np.zeros_like(points[:,0]), np.zeros_like(points[:,1])
+    prev_idx = 0
+    radial_shell = np.zeros(len(xnew))
+    k = 0
+    while len(points) > 0: # should run three times for a 19-port lantern
+        if len(points) == 1:
+            v = np.array([0])
+        else:
+            hull = ConvexHull(points)
+            v = hull.vertices
+        nhull = len(v)
+        xtemp, ytemp = points[v][:,0], points[v][:,1]
+        sortperm = np.argsort(angles_relative_to_center(xtemp, ytemp))[::-1]
+        xnew[prev_idx:prev_idx+nhull] = xtemp[sortperm]
+        ynew[prev_idx:prev_idx+nhull] = ytemp[sortperm]
+        radial_shell[prev_idx:prev_idx+nhull] = k
+        k += 1
+        prev_idx += nhull
+        points = np.delete(points, v, axis=0)
+
+    return np.flip(xnew), np.flip(ynew)
+
+def refine_centroids(centroids, image, cutout_size=12):
+    new_centroids = np.zeros_like(centroids)
+    for i in range(len(centroids)):
+        xl, xu = int(centroids[i,0]) - cutout_size, int(centroids[i,0]) + cutout_size + 1
+        yl, yu = int(centroids[i,1]) - cutout_size, int(centroids[i,1]) + cutout_size + 1
+        new_centroids[i] = center_of_mass(image[xl:xu, yl:yu], xg[xl:xu, yl:yu], yg[xl:xu, yl:yu])
+        
+    return new_centroids

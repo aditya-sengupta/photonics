@@ -113,29 +113,6 @@ class LanternReader:
             plt.savefig(self.filepath(f"port_mask_{datetime_now()}", ext="png"))
         plt.show()
 
-    def ports_in_radial_order(self, points):
-        xnew, ynew = np.zeros_like(points[:,0]), np.zeros_like(points[:,1])
-        prev_idx = 0
-        radial_shell = np.zeros(len(xnew))
-        k = 0
-        while len(points) > 0: # should run three times for a 19-port lantern
-            if len(points) == 1:
-                v = np.array([0])
-            else:
-                hull = ConvexHull(points)
-                v = hull.vertices
-            nhull = len(v)
-            xtemp, ytemp = points[v][:,0], points[v][:,1]
-            sortperm = np.argsort(angles_relative_to_center(xtemp, ytemp))[::-1]
-            xnew[prev_idx:prev_idx+nhull] = xtemp[sortperm]
-            ynew[prev_idx:prev_idx+nhull] = ytemp[sortperm]
-            radial_shell[prev_idx:prev_idx+nhull] = k
-            k += 1
-            prev_idx += nhull
-            points = np.delete(points, v, axis=0)
-
-        return np.flip(xnew), np.flip(ynew), np.flip((k - 1 - radial_shell) / (k - 1))
-
     def bounding_box(self, pad=0):
         return (floor(min(self.xc)-pad), ceil(max(self.xc)+pad), floor(min(self.yc)-pad), ceil(max(self.yc)+pad))
 

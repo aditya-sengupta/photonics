@@ -8,7 +8,8 @@ from time import sleep, time
 from tqdm import tqdm, trange
 import warnings
 import h5py
-from ..utils import date_now, datetime_now, datetime_ms_now, time_ms_now, rms, DATA_PATH, zernike_names
+
+from ..utils import date_now, datetime_now, datetime_ms_now, time_ms_now, rms, DATA_PATH, zernike_names, center_of_mass
 
 def normalize(x):
     return x / np.sum(x)
@@ -64,9 +65,18 @@ class ShaneLantern:
         
     def destroy_paramiko(self):
         self.client.close()
-  
-    def set_centroids(self, centroids, save=True):
-        self.centroids = centroids
+        
+    def refine_centroids(self, centroids, image, cutout_size=12):
+        new_centroids = np.zeros_like(centroids)
+        for i in range(self.Nports):
+            xl, xu = int(centroids[i,0]) - cutout_size, int(centroids[i,0]) + cutout_size + 1
+            yl, yu = int(centroids[i,1]) - cutout_size, int(centroids[i,1]) + cutout_size + 1
+            new_centroids[i] = center_of_mass(image[xl:xu, yl:yu], xg[xl:xu, yl:yu], yg[xl:xu, yl:yu])
+            
+        return new_centroids
+
+    def set_centroids(self, centroids, image, save=True):
+        self.centroids = self.refine_centroids(centroids)
         self.xc, self.yc = centroids[:,0], centroids[:,1]
         self.masks = [(self.xi - xc) ** 2 + (self.yi - yc) ** 2 <= self.spot_radius_px ** 2 for (xc, yc) in self.centroids]
         self.centroids_dt = datetime_now()

@@ -129,7 +129,7 @@ def monitor_stability(plwfs, cam, n=100):
 
     return measurements
 
-def (plwfs):
+def snr(plwfs):
     reader = plwfs.reader
     img = plwfs.cam.get()
     rp = 2 * (reader.fwhm + 1)
