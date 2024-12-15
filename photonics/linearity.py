@@ -25,7 +25,7 @@ def interpolate_weights(arr: np.ndarray, x: float):
 	w = 1 - (x - arr[idx]) / (arr[idx+1] - arr[idx])
 	return idx, w
 
-def make_interaction_matrix(amplitudes, mode_sweep, poke_amplitude=0.1):
+def make_postprocessed_interaction_matrix(amplitudes, mode_sweep, poke_amplitude=0.1):
 	"""
 	Makes a modal interaction matrix given a linearity sweep dataset.
 	

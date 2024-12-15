@@ -79,7 +79,6 @@ def center_of_mass(img, indices_x, indices_y):
     yc = np.sum(img * indices_y) / np.sum(img)
     return xc, yc
 
-
 def ports_in_radial_order(points):
     xnew, ynew = np.zeros_like(points[:,0]), np.zeros_like(points[:,1])
     prev_idx = 0
@@ -111,3 +110,6 @@ def refine_centroids(centroids, image, cutout_size=12):
         new_centroids[i] = center_of_mass(image[xl:xu, yl:yu], xg[xl:xu, yl:yu], yg[xl:xu, yl:yu])
         
     return new_centroids
+
+def normalize(x):
+    return x / np.sum(x)
