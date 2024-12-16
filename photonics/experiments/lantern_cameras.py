@@ -28,10 +28,9 @@ class LanternCamera(ABC):
         self.save(f"pl_flat_{datetime_now()}", self.pl_flat)
         
     def plot_ports(self, save=False):
-        # only run after set_centroids
         sc = plt.scatter(self.xc, self.yc, c=self.radial_shell)
-        plt.xlim((0, self.imgshape[1]))
-        plt.ylim((0, self.imgshape[0]))
+        plt.xlim((0, self.xg.shape[1]))
+        plt.ylim((0, self.xg.shape[0]))
         plt.xticks([])
         plt.yticks([])
         sc.axes.invert_yaxis()
@@ -50,10 +49,11 @@ class LanternCamera(ABC):
             self.tag = input("enter a tag: ")
         centroids_file = os.path.join(DATA_PATH, "current_centroids", f"current_centroids_{self.tag}.hdf5")
         if os.path.exists(centroids_file) and not rerun:
-            with h5py.File(centroids_file, "w") as f:
+            with h5py.File(centroids_file, "r") as f:
                 centroids = np.array(f["centroids"])
                 self.xc = centroids[:,0]
                 self.yc = centroids[:,1]
+                self.radial_shell = centroids[:,2]
                 self.spot_radius_px = f["centroids"].attrs["spot_radius_px"]
             return
         global coords
@@ -76,7 +76,7 @@ class LanternCamera(ABC):
             
             accepted_positions = input("Identified PL ports OK? [y/n] ") == "y"
 
-        self.xc, self.yc = ports_in_radial_order(self.refine_centroids(centroids, image))
+        self.xc, self.yc, self.radial_shell = ports_in_radial_order(self.refine_centroids(centroids, image))
         self.yi, self.xi = np.indices(image.shape)
         self.masks = [(self.xi - xc) ** 2 + (self.yi - yc) ** 2 <= self.spot_radius_px ** 2 for (xc, yc) in zip(self.xc, self.yc)]
         self.centroids_dt = datetime_now()
@@ -96,9 +96,10 @@ class LanternCamera(ABC):
                 self.masks = [(self.xi - xc) ** 2 + (self.yi - yc) ** 2 <= self.spot_radius_px ** 2 for (xc, yc) in zip(self.xc, self.yc)]
             else:
                 accepted_radius = True
-        new_centroids = np.zeros_like(centroids)
+        new_centroids = np.zeros((len(centroids), 3))
         new_centroids[:,0] = self.xc
         new_centroids[:,1] = self.yc
+        new_centroids[:,2] = self.radial_shell
         
         with h5py.File(centroids_file, "w") as f:
             c = f.create_dataset("centroids", data=new_centroids)
@@ -192,6 +193,7 @@ class SimulatedLanternCamera(LanternCamera):
         self.optics = optics
         self.lantern_optics = LanternOptics(optics)
         self.exp_ms = 1e5
+        self.gain = 1
         self.nframes = 10
         self.detector = NoisyDetector(detector_grid=self.lantern_optics.focal_grid)
         self.dm = dm

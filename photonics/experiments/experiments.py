@@ -55,54 +55,49 @@ class Experiments:
 
     def openloop_experiment(self, patterns, tag="openloop_experiment", delay=0):
         start_stamp = datetime_ms_now()
-        self.send_zeros(verbose=False)
-        img = self.get_image()
+        self.dm.send_zeros(verbose=False)
+        img = self.wfs.get_image()
         start_time_stamp = time_ms_now()
-        bbox_shape = self.get_image().shape
+        bbox_shape = self.wfs.get_image().shape
         pl_readout = np.zeros((len(patterns), *bbox_shape))
         
         for (i, p) in enumerate(tqdm(patterns)):
-            self.curr_dmc = p
-            self.command_to_dm(verbose=False)
+            self.dm.command_to_dm(p, verbose=False)
             sleep(delay)
-            img = self.get_image()
+            img = self.wfs.get_image()
             pl_readout[i] = img
         
-        pl_intensities = np.array(list(map(self.get_intensities, pl_readout)))
-        self.send_zeros(verbose=False)
+        pl_intensities = np.array(list(map(self.wfs.get_intensities, pl_readout)))
+        self.dm.send_zeros(verbose=False)
         with h5py.File(self.filepath(f"{tag}_{datetime_now()}", ext="hdf5"), "w") as f:
             dmcs_dataset = f.create_dataset("dmc", data=patterns)
             if self.save_full_frame:
                 f.create_dataset("pl_images", data=pl_readout)
             pl_intensities_dataset = f.create_dataset("pl_intensities", data=pl_intensities)
-            pl_intensities_dataset.attrs["exp_ms"] = self.exp_ms
-            pl_intensities_dataset.attrs["gain"] = self.gain
-            pl_intensities_dataset.attrs["nframes"] = self.nframes
-            pl_intensities_dataset.attrs["centroids_dt"] = self.centroids_dt
+            pl_intensities_dataset.attrs["exp_ms"] = self.wfs.exp_ms
+            pl_intensities_dataset.attrs["gain"] = self.wfs.gain
+            pl_intensities_dataset.attrs["nframes"] = self.wfs.nframes
+            pl_intensities_dataset.attrs["centroids_dt"] = self.wfs.centroids_dt
 
-        self.destroy_paramiko()
         return pl_intensities
 
     def save_current_image(self, tag=""):
-        self.save(f"pl_image_{datetime_now()}_{tag}", self.get_image())
+        self.save(f"pl_image_{datetime_now()}_{tag}", self.wfs.get_image())
 
-    def make_interaction_matrix(self, amp_calib=0.01, thres=1/30, nm=None):
-        self.setup_paramiko()
-        if nm is None:
-            nm = self.Nmodes
-        self.int_mat = np.zeros((self.Nports, nm))
+    def make_interaction_matrix(self, nm, amp_calib=0.01, thres=1/30):
+        self.int_mat = np.zeros((self.wfs.Nports, nm))
         pushes = []
         pulls = []
         for i in trange(nm):
-            self.zern_to_dm(i + 1, amp_calib, verbose=False)
+            self.dm.apply_mode(i + 1, amp_calib)
             sleep(0.1)
-            s_push = self.get_image()
+            s_push = self.wfs.get_image()
             pushes.append(s_push)
-            self.zern_to_dm(i + 1, -amp_calib, verbose=False)
+            self.dm.apply_mode(i + 1, -amp_calib)
             sleep(0.1)
-            s_pull = self.get_image()
+            s_pull = self.wfs.get_image()
             pulls.append(s_pull)
-            s = (self.get_intensities(s_push) - self.get_intensities(s_pull)) / (2 * amp_calib)
+            s = (self.wfs.get_intensities(s_push) - self.wfs.get_intensities(s_pull)) / (2 * amp_calib)
             self.int_mat[:,i] = s.ravel()
    
         self.cmd_mat = np.linalg.pinv(self.int_mat, thres)
@@ -112,14 +107,13 @@ class Experiments:
             pulls_dset = f.create_dataset("pull_frames", data=np.array(pulls))
             intmat_dset = f.create_dataset("intmat", data=self.int_mat)
             intmat_dset.attrs["amp_calib"] = amp_calib
-            intmat_dset.attrs["exp_ms"] = self.exp_ms
-            intmat_dset.attrs["gain"] = self.gain
-            intmat_dset.attrs["nframes"] = self.nframes
+            intmat_dset.attrs["exp_ms"] = self.wfs.exp_ms
+            intmat_dset.attrs["gain"] = self.wfs.gain
+            intmat_dset.attrs["nframes"] = self.wfs.nframes
             cmdmat_dset = f.create_dataset("cmdmat", data=self.cmd_mat)
             cmdmat_dset.attrs["thres"] = thres
    
-        self.send_zeros()
-        self.destroy_paramiko()
+        self.dm.send_zeros()
         
     def load_interaction_matrix(self, fname):
         with h5py.File(fname) as f:
@@ -129,43 +123,42 @@ class Experiments:
             self.cmd_mat = np.array(f["cmdmat"])
 
     def pseudo_cl_iteration(self, gain=0.1, verbose=True):
-        dm_start = np.copy(self.curr_dmc)
+        dm_start = np.copy(self.dm.actuators)
         if verbose:
-            print(f"Initial error = {rms(self.curr_dmc)}")
-        lantern_reading = np.zeros(self.Nmodes)
-        lantern_image = self.get_image()
-        lr = self.cmd_mat @ (self.get_intensities(lantern_image) - self.pl_flat)
+            print(f"Initial error = {rms(self.dm.actuators)}")
+        lantern_reading = np.zeros(self.dm.Nmodes)
+        lantern_image = self.wfs.get_image()
+        lr = self.cmd_mat @ (self.wfs.get_intensities(lantern_image) - self.pl_flat)
         lantern_reading[:len(lr)] = lr
         # does the sign of measured WF errors match the actual signs?
-        sign_match = ''.join(map(lambda x: str(int(x)), (np.sign(lantern_reading * self.curr_dmc) * 2 + 2)/4))
+        sign_match = ''.join(map(lambda x: str(int(x)), (np.sign(lantern_reading * self.dm.actuators) * 2 + 2)/4))
         if verbose:
             print(f"{sign_match}")
-        self.curr_dmc -= gain * lantern_reading
-        self.command_to_dm(verbose=verbose)
-        dm_end = np.copy(self.curr_dmc)
+        self.dm.command_to_dm(self.dm.actuators - gain * lantern_reading, verbose=verbose)
+        dm_end = np.copy(self.dm.actuators)
         if verbose:
-            print(f"Final error = {rms(self.curr_dmc)}")
+            print(f"Final error = {rms(self.dm.actuators)}")
         
         if not verbose:
             return lantern_image, lantern_reading
 
     def closed_loop(self, gain=0.1, niter=20):
-        dmcs = [np.copy(self.curr_dmc)]
+        dmcs = [np.copy(self.dm.actuators)]
         lantern_images, lantern_readings = [], []
         for i in trange(niter):
            lantern_image, lantern_reading = self.pseudo_cl_iteration(gain=gain, verbose=False)
-           dmcs.append(np.copy(self.curr_dmc))
+           dmcs.append(np.copy(self.dm.actuators))
            lantern_images.append(lantern_image)
            lantern_readings.append(lantern_reading)
            
         with h5py.File(self.filepath(f"closedloop_{datetime_now()}", ext="hdf5"), "w") as f:
             dmcs_dset = f.create_dataset("dmcs", data=np.array(dmcs))
-            dmcs_dset.attrs["exp_ms"] = self.exp_ms
-            dmcs_dset.attrs["gain"] = self.gain
-            dmcs_dset.attrs["centroids_timestamp"] = self.centroids_dt
+            dmcs_dset.attrs["exp_ms"] = self.wfs.exp_ms
+            dmcs_dset.attrs["gain"] = self.wfs.gain
+            dmcs_dset.attrs["centroids_timestamp"] = self.wfs.centroids_dt
             dmcs_dset.attrs["cmd_timestamp"] = self.cmd_dt
             images_dset = f.create_dataset("lantern_images", data=np.array(lantern_images))
-            images_dset.attrs["spot_radius_px"] = self.spot_radius_px
+            images_dset.attrs["spot_radius_px"] = self.wfs.spot_radius_px
             f.create_dataset("lantern_readings", data=np.array(lantern_readings))
 
         return dmcs, lantern_readings
@@ -174,14 +167,11 @@ class Experiments:
         with h5py.File(fname) as f:
             dmcs = np.array(f["dmcs"])
         for (i, dmc) in enumerate(dmcs):
-            self.curr_dmc = dmc
-            self.command_to_dm()
+            self.dm.command_to_dm(dmc)
             # I don't have programmatic access to the PSF camera, so I'll just wait for user input
             input(f"Frame {i}.")
 
-    def measure_linearity(self, min_amp=-0.06, max_amp=0.06, step=0.01, nmodes=None):
-        if nmodes is None:
-            nmodes = self.Nmodes
+    def measure_linearity(self, nmodes, min_amp=-0.06, max_amp=0.06, step=0.01):
         all_recon = []
         amps = None
         for z in range(1, nmodes+1):
@@ -199,8 +189,8 @@ class Experiments:
 
     # different types of experiment
     def sweep_mode(self, z, min_amp=-1.0, max_amp=1.0, step=0.1):
-        amps = np.arange(min_amp, max_amp+2*step, step)
-        patterns = np.zeros((len(amps), self.Nmodes))
+        amps = np.arange(min_amp, max_amp+step/2, step)
+        patterns = np.zeros((len(amps), self.dm.Nmodes))
         patterns[:,z-1] = amps
         return amps, self.openloop_experiment(patterns, tag=f"sweep_mode_{z}")
 
@@ -212,7 +202,7 @@ class Experiments:
         return amps, self.openloop_experiment(patterns, tag="sweep_all_modes")
 
     def random_combinations(self, Niters, lim=0.05):
-        inputzs = np.random.uniform(-lim, lim, (Niters+1, self.Nmodes))
+        inputzs = np.random.uniform(-lim, lim, (Niters+1, self.dm.Nmodes))
         self.openloop_experiment(inputzs, tag="random_combinations")
 
     def exptime_sweep(self, exp_ms_values, tag=""):
@@ -244,7 +234,7 @@ class Experiments:
         return exp_ms_values, snr
     
     def stability(self, n_pictures=20, wait_s=10):
-        patterns = np.tile(self.curr_dmc, (n_pictures,1))
+        patterns = np.tile(self.dm.actuators, (n_pictures,1))
         self.openloop_experiment(patterns, tag="stability", delay=wait_s)
         
     def stability_better(self, n_pictures=20, wait_s=2):

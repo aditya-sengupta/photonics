@@ -97,7 +97,7 @@ def ports_in_radial_order(points):
         prev_idx += nhull
         points = np.delete(points, v, axis=0)
 
-    return np.flip(xnew), np.flip(ynew)
+    return np.flip(xnew), np.flip(ynew), np.flip(radial_shell)
 
 def normalize(x):
     return x / np.sum(x)
