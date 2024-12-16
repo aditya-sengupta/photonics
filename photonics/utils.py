@@ -42,9 +42,6 @@ def time_ms_now():
     dt = datetime.now()
     return dt.strftime('%H%M%S') + "_" + str(dt.microsecond)
 
-def make_fname(n):
-    return f"{PROJECT_ROOT}/data/pl_{date_now()}/{n}_{datetime_now()}"
-
 def angles_relative_to_center(x, y):
     xc, yc = np.mean(x), np.mean(y)
     xd, yd = x - xc, y - yc
@@ -102,14 +99,27 @@ def ports_in_radial_order(points):
 
     return np.flip(xnew), np.flip(ynew)
 
-def refine_centroids(centroids, image, cutout_size=12):
-    new_centroids = np.zeros_like(centroids)
-    for i in range(len(centroids)):
-        xl, xu = int(centroids[i,0]) - cutout_size, int(centroids[i,0]) + cutout_size + 1
-        yl, yu = int(centroids[i,1]) - cutout_size, int(centroids[i,1]) + cutout_size + 1
-        new_centroids[i] = center_of_mass(image[xl:xu, yl:yu], xg[xl:xu, yl:yu], yg[xl:xu, yl:yu])
-        
-    return new_centroids
-
 def normalize(x):
     return x / np.sum(x)
+
+i_iter = 1
+coords = []
+def onclick(event):
+	global ix, iy, i_iter
+	ix, iy = event.xdata, event.ydata
+	#print(ix, iy)
+
+	if ix != None:
+		print('Click %d: x = %d, y = %d'%(i_iter, ix, iy))
+		i_iter += 1
+	elif ix == None:
+		print(ix, iy)
+
+	global coords
+	coords.append((ix, iy))
+
+	if ix == None and iy == None:
+		fig.canvas.mpl_disconnect(cid)
+		plt.close()
+
+	return coords

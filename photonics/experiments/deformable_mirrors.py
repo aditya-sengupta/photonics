@@ -100,6 +100,11 @@ class SimulatedDM:
         else:
             raise NameError("DM basis needs to be zonal or modal")
         
+    def send_zeros(self, verbose=True):
+        if verbose:
+            print("Sending zeros.")
+        self.deformable_mirror.actuators[:] = 0.0
+        
     def apply_mode(self, mode, amplitude):
         self.deformable_mirror.actuators[mode] = amplitude
 

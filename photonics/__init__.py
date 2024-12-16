@@ -1,3 +1,6 @@
+import os
+os.environ["PYTHON_JULIACALL_HANDLE_SIGNALS"] = "yes"
+import dao
 from matplotlib import pyplot as plt
 
 plt.rc('font', family='serif',size=12)
@@ -9,3 +12,6 @@ plt.rcParams.update({
 })
 
 from .utils import *
+from .experiments.deformable_mirrors import SimulatedDM, IrisDM, ShaneDM
+from .experiments.lantern_cameras import Goldeye, SimulatedLanternCamera
+from .experiments.experiments import Experiments

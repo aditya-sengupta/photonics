@@ -12,3 +12,4 @@ __pycache__
 references/
 *.mp4
 figures/psf_cl.gif
+libdao.dylib
