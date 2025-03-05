@@ -53,44 +53,6 @@ class ShaneDM:
             print("Sending zeros.")
         self.command_to_dm(verbose=False)
         
-class IrisDM:
-    def __init__(self):
-        port = "5557"
-        context = zmq.Context()
-        self.socket = context.socket(zmq.REQ)
-        self.socket.connect("tcp://128.114.23.114:%s" % port)
-        self.socket.send(np.array([1]).astype(np.float32));
-        msg = socket.recv()
-        
-    def apply_segment(self, segment, z, xgrad, ygrad):
-        self.socket.send(np.array([segment, z, xgrad, ygrad]).astype(np.float32));
-        return self.socket.recv()
-
-    def apply_mode(self, mode, amplitude):
-        self.socket.send(np.array([mode, amplitude]).astype(np.float32));
-        return self.socket.recv()
-
-    def release_mirror(self):
-        self.socket.send(np.array([0]).astype(np.float32));
-        msg = self.socket.recv()
-
-    def stop_server(self):
-        self.socket.send(np.array([2]).astype(np.float32));
-        return self.socket.recv()
-
-    def piston_all(self, pauseTime=0.1):
-        # piston each segment
-        for k in trange(1, 168):
-            self.apply_segment(k, 0.2, 0, 0)
-            time.sleep(pauseTime)
-            self.apply_segment(k, -0.2, 0, 0)
-            time.sleep(pauseTime)
-            self.apply_segment(k, 0., 0, 0)
-            
-    def __del__(self):
-        self.release_mirror()
-        self.stop_server()
-          
 class SimulatedDM:
     def __init__(self, pupil_grid, dm_basis="modal", num_actuators=9, telescope_diameter=10):
         self.Nmodes = num_actuators ** 2

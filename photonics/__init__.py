@@ -1,6 +1,5 @@
 import os
 os.environ["PYTHON_JULIACALL_HANDLE_SIGNALS"] = "yes"
-import dao
 from matplotlib import pyplot as plt
 
 plt.rc('font', family='serif',size=12)

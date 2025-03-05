@@ -2,7 +2,6 @@ import os
 
 from abc import ABC
 
-import dao
 import h5py
 import numpy as np
 
@@ -135,6 +134,7 @@ class LanternCamera(ABC):
         return recon_image
 
 class Goldeye(LanternCamera):
+    # for Shane; on muirSEAL get this from `seal`
     def __init__(self, dm): 
         self.im = dao.shm('/tmp/testShm.im.shm', np.zeros((520, 656)).astype(np.uint16))
         self.ditshm = dao.shm('/tmp/testShmDit.im.shm', np.zeros((1,1)).astype(np.float32))

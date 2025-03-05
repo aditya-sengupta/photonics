@@ -4,12 +4,12 @@ import hcipy as hc
 import lightbeam as lb
 from hcipy import imshow_field
 from matplotlib import pyplot as plt
-from juliacall import Main as jl
-jl.seval("using Flux")
-jl.seval("using JLD2")
+#from juliacall import Main as jl
+#jl.seval("using Flux")
+#jl.seval("using JLD2")
 
 from ..utils import PROJECT_ROOT, DATA_PATH, date_now, zernike_names, nanify
-from .command_matrix import make_command_matrix
+#from .command_matrix import make_command_matrix
 
 class LanternOptics:
 	"""
