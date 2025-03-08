@@ -44,7 +44,6 @@ class ShaneDM:
         command = ",".join(map(str, self.actuators))
         if verbose:
             print(f"DMC {command}.")
-        #warnings.warn("If you see this and you're at Lick, uncomment the lines defining and running shell_command.")
         self.client.exec_command(f"/home/user/ShaneAO/shade/imageSharpen_nogui -s {command}")
         
     def send_zeros(self, verbose=True):

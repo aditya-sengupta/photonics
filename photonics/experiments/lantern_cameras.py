@@ -15,14 +15,6 @@ from ..simulations.lantern_optics import LanternOptics
 class LanternReader:
     def __init__(self, camera):
         self.camera = camera
-    
-    def measure_dark(self, direct=True):
-        if direct:
-            input("Taking a dark frame, remove the light source!")
-
-        self.dark = 0
-        self.dark = self.camera.get_image()
-        # need to think through an architecture for saving, reusing, and not overwriting darks
 
     def measure_pl_flat(self):
         self.send_zeros(verbose=True)
