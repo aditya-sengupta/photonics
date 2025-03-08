@@ -13,13 +13,16 @@ from ..simulations.optics import Optics
 from ..simulations.lantern_optics import LanternOptics
 
 class LanternReader:
-    def __init__(self, camera):
-        self.camera = camera
+    def __init__(self, reference_image, tag=None, rerun=False):
+        self.reference_image = reference_image
+        self.xi, self.yi = np.indices(self.reference_image.shape)
+        self.spot_radius_px = 10
+        if tag is None:
+            self.tag = input("enter a tag: ")
+        else:
+            self.tag = tag
+        self.set_centroids(rerun=rerun)
 
-    def measure_pl_flat(self):
-        self.send_zeros(verbose=True)
-        self.pl_flat = self.get_intensities(self.camera.get_image())
-        self.save(f"pl_flat_{datetime_now()}", self.pl_flat)
         
     def plot_ports(self, save=False):
         sc = plt.scatter(self.xc, self.yc, c=self.radial_shell)
@@ -35,12 +38,10 @@ class LanternReader:
             plt.savefig(self.filepath(f"port_mask_{datetime_now()}", ext="png"))
         plt.show()
     
-    def set_centroids(self, image, rerun=False):
+    def set_centroids(self, rerun=False):
         """
-        Sets the centroids of each PL port based on a reference image, in `image`.
+        Sets the centroids of each PL port based on a reference image
         """
-        if not hasattr(self, "tag"):
-            self.tag = input("enter a tag: ")
         centroids_file = os.path.join(DATA_PATH, "current_centroids", f"current_centroids_{self.tag}.hdf5")
         if os.path.exists(centroids_file) and not rerun:
             with h5py.File(centroids_file, "r") as f:
@@ -49,13 +50,15 @@ class LanternReader:
                 self.yc = centroids[:,1]
                 self.radial_shell = centroids[:,2]
                 self.spot_radius_px = f["centroids"].attrs["spot_radius_px"]
+            self.Nports = len(self.xc)
+            self.masks = [(self.xi - xc) ** 2 + (self.yi - yc) ** 2 <= self.spot_radius_px ** 2 for (xc, yc) in zip(self.xc, self.yc)]
             return
         global coords
-        while len(coords) > 0:
-            coords.remove(coords[0])
         accepted_positions = False
         while not accepted_positions:
-            test_image_ret = image
+            while len(coords) > 0:
+                coords.remove(coords[0])
+            test_image_ret = self.reference_image
             fig = plt.figure()
             plt.imshow(test_image_ret)
             plt.title("Click on all the PL ports!")
@@ -70,8 +73,7 @@ class LanternReader:
             
             accepted_positions = input("Identified PL ports OK? [y/n] ") == "y"
 
-        self.xc, self.yc, self.radial_shell = ports_in_radial_order(self.refine_centroids(centroids, image))
-        self.yi, self.xi = np.indices(image.shape)
+        self.xc, self.yc, self.radial_shell = ports_in_radial_order(self.refine_centroids(centroids))
         self.masks = [(self.xi - xc) ** 2 + (self.yi - yc) ** 2 <= self.spot_radius_px ** 2 for (xc, yc) in zip(self.xc, self.yc)]
         self.centroids_dt = datetime_now()
         accepted_radius = False
@@ -99,14 +101,14 @@ class LanternReader:
             c = f.create_dataset("centroids", data=new_centroids)
             c.attrs["spot_radius_px"] = self.spot_radius_px
                 
-    def refine_centroids(self, centroids, image, cutout_size=12):
+    def refine_centroids(self, centroids, cutout_size=25):
         new_centroids = np.zeros_like(centroids)
         self.Nports = centroids.shape[0]
         for i in range(self.Nports):
             xl, xu = int(centroids[i,0]) - cutout_size, int(centroids[i,0]) + cutout_size + 1
             yl, yu = int(centroids[i,1]) - cutout_size, int(centroids[i,1]) + cutout_size + 1
-            image_cutout = image[xl:xu, yl:yu]
-            new_centroids[i] = center_of_mass(image_cutout - np.min(image_cutout) + 1, self.xg[xl:xu, yl:yu], self.yg[xl:xu, yl:yu])
+            image_cutout = self.reference_image[yl:yu, xl:xu]
+            new_centroids[i] = center_of_mass(image_cutout - np.min(image_cutout) + 1, self.xi[yl:yu, xl:xu], self.yi[yl:yu, xl:xu])
             
         return new_centroids
                 
@@ -130,7 +132,7 @@ class LanternReader:
 
 class ShaneGoldeye:
     # for Shane; on muirSEAL get this from `seal`
-    def __init__(self, dm): 
+    def __init__(self): 
         self.im = dao.shm('/tmp/testShm.im.shm', np.zeros((520, 656)).astype(np.uint16))
         self.ditshm = dao.shm('/tmp/testShmDit.im.shm', np.zeros((1,1)).astype(np.float32))
         self.ditshm.set_data(self.ditshm.get_data() * 0 + 220_000)
@@ -182,30 +184,3 @@ class ShaneGoldeye:
 
         return np.mean(frames, axis=0)
         
-class SimulatedLanternCamera:
-    def __init__(self, dm, optics, tag=""):
-        self.tag = tag
-        self.optics = optics
-        self.lantern_optics = LanternOptics(optics)
-        self.exp_ms = 1e5
-        self.gain = 1
-        self.nframes = 10
-        self.detector = NoisyDetector(detector_grid=self.lantern_optics.focal_grid)
-        self.dm = dm
-        self.xg, self.yg = np.indices(optics.focal_grid.shape)
-        self.spot_radius_px = 6
-        
-    def measure_dark(self):
-        self.dark = Field(np.zeros(self.lantern_optics.focal_grid.size), grid=self.lantern_optics.focal_grid)
-        # I could probably simulate this better
-        
-    def get_image(self):
-        frames = []
-        for _ in range(self.nframes):
-            focal_wf = self.optics.focal_propagator(self.dm.forward(self.optics.wf))
-            coeffs_true, pl_image = self.lantern_optics.lantern_output(focal_wf)
-            pl_wf = Wavefront(Field(pl_image.flatten(), self.lantern_optics.focal_grid), wavelength=self.optics.wl)
-            self.detector.integrate(pl_wf, self.exp_ms)
-            frames.append(self.detector.read_out() - self.dark)
-            
-        return (sum(frames) / self.nframes).shaped

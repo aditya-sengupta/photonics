@@ -12,5 +12,5 @@ plt.rcParams.update({
 
 from .utils import *
 from .experiments.deformable_mirrors import SimulatedDM, ShaneDM
-from .experiments.lantern_cameras import LanternReader, ShaneGoldeye, SimulatedLanternCamera
+from .experiments.lantern_cameras import LanternReader, ShaneGoldeye
 from .experiments.experiments import Experiments
