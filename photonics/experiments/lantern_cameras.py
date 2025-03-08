@@ -12,18 +12,21 @@ from ..utils import onclick, coords, ports_in_radial_order, center_of_mass, date
 from ..simulations.optics import Optics
 from ..simulations.lantern_optics import LanternOptics
 
-class LanternCamera(ABC):
+class LanternReader:
+    def __init__(self, camera):
+        self.camera = camera
+    
     def measure_dark(self, direct=True):
         if direct:
             input("Taking a dark frame, remove the light source!")
 
         self.dark = 0
-        self.dark = self.get_image()
+        self.dark = self.camera.get_image()
         # need to think through an architecture for saving, reusing, and not overwriting darks
 
     def measure_pl_flat(self):
         self.send_zeros(verbose=True)
-        self.pl_flat = self.get_intensities(self.get_image())
+        self.pl_flat = self.get_intensities(self.camera.get_image())
         self.save(f"pl_flat_{datetime_now()}", self.pl_flat)
         
     def plot_ports(self, save=False):
@@ -133,7 +136,7 @@ class LanternCamera(ABC):
 
         return recon_image
 
-class Goldeye(LanternCamera):
+class ShaneGoldeye:
     # for Shane; on muirSEAL get this from `seal`
     def __init__(self, dm): 
         self.im = dao.shm('/tmp/testShm.im.shm', np.zeros((520, 656)).astype(np.uint16))
@@ -187,7 +190,7 @@ class Goldeye(LanternCamera):
 
         return np.mean(frames, axis=0)
         
-class SimulatedLanternCamera(LanternCamera):
+class SimulatedLanternCamera:
     def __init__(self, dm, optics, tag=""):
         self.tag = tag
         self.optics = optics

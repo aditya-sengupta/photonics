@@ -1,13 +1,7 @@
 README.md
 setup.py
 photonics/__init__.py
-photonics/calibrate_dm.py
-photonics/lantern_optics.py
-photonics/lantern_reader.py
-photonics/lumerical.py
-photonics/pyramid_optics.py
-photonics/seal.py
-photonics/shane.py
+photonics/linearity.py
 photonics/utils.py
 photonics.egg-info/PKG-INFO
 photonics.egg-info/SOURCES.txt

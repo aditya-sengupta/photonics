@@ -10,8 +10,8 @@ import warnings
 import h5py
 import paramiko
 
-from .deformable_mirrors import ShaneDM, IrisDM, SimulatedDM
-from .lantern_cameras import Goldeye, SimulatedLanternCamera
+from .deformable_mirrors import ShaneDM, SimulatedDM
+from .lantern_cameras import ShaneGoldeye, SimulatedLanternCamera
 from ..utils import date_now, datetime_now, datetime_ms_now, time_ms_now, rms, DATA_PATH, zernike_names, center_of_mass, normalize
 
 class Experiments:
