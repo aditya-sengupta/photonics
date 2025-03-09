@@ -5,6 +5,8 @@ from abc import ABC
 import h5py
 import numpy as np
 
+import dao
+
 from matplotlib import pyplot as plt
 from hcipy import NoisyDetector, Wavefront, Field
 
@@ -121,7 +123,7 @@ class LanternReader:
             intensities[i] = np.sum(img[self.masks[i]])
             j += 1
 
-        return normalize(intensities)
+        return intensities
     
     def reconstruct_image(self, img, intensities):
         recon_image = np.zeros_like(img)
@@ -133,6 +135,7 @@ class LanternReader:
 class ShaneGoldeye:
     # for Shane; on muirSEAL get this from `seal`
     def __init__(self): 
+        self.n_frames = 1
         self.im = dao.shm('/tmp/testShm.im.shm', np.zeros((520, 656)).astype(np.uint16))
         self.ditshm = dao.shm('/tmp/testShmDit.im.shm', np.zeros((1,1)).astype(np.float32))
         self.ditshm.set_data(self.ditshm.get_data() * 0 + 220_000)
@@ -178,9 +181,9 @@ class ShaneGoldeye:
         Get an image off the lantern camera. 
         """
         frames = []
-        for i in range(self.nframes):
+        for i in range(self.n_frames):
             sleep(np.float64(self.exp_ms) / 1e3)
-            frames.append(self.im.get_data(check=True).astype(float) - self.dark)
+            frames.append(self.im.get_data(check=True).astype(float))
 
         return np.mean(frames, axis=0)
         

@@ -1,0 +1,1 @@
+daoHwAvtG030DeviceCtrl -L /tmp/testShm.im.shm 1 224.1.1.1 "Allied Vision-Goldeye G-030 (4068050)-08-406805003393"

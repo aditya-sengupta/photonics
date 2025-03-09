@@ -15,9 +15,10 @@ from .lantern_cameras import ShaneGoldeye
 from ..utils import date_now, datetime_now, datetime_ms_now, time_ms_now, rms, DATA_PATH, zernike_names, center_of_mass, normalize
 
 class Experiments:
-    def __init__(self, dm, wfs):
+    def __init__(self, dm, reader, camera):
         self.dm = dm
-        self.wfs = wfs
+        self.reader = reader
+        self.camera = camera
         subdir = f"pl_{date_now()}"
         self.subdir = subdir
         if not os.path.isdir(self.directory):
@@ -50,54 +51,54 @@ class Experiments:
   
     def measure_pl_flat(self):
         self.dm.send_zeros(verbose=True)
-        self.pl_flat = self.wfs.get_intensities(self.wfs.get_image())
+        self.pl_flat = self.reader.get_intensities(self.camera.get_image())
         self.save(f"pl_flat_{datetime_now()}", self.pl_flat)
 
     def openloop_experiment(self, patterns, tag="openloop_experiment", delay=0):
         start_stamp = datetime_ms_now()
         self.dm.send_zeros(verbose=False)
-        img = self.wfs.get_image()
+        img = self.camera.get_image()
         start_time_stamp = time_ms_now()
-        bbox_shape = self.wfs.get_image().shape
+        bbox_shape = self.camera.get_image().shape
         pl_readout = np.zeros((len(patterns), *bbox_shape))
         
         for (i, p) in enumerate(tqdm(patterns)):
             self.dm.command_to_dm(p, verbose=False)
             sleep(delay)
-            img = self.wfs.get_image()
+            img = self.camera.get_image()
             pl_readout[i] = img
         
-        pl_intensities = np.array(list(map(self.wfs.get_intensities, pl_readout)))
+        pl_intensities = np.array(list(map(self.reader.get_intensities, pl_readout)))
         self.dm.send_zeros(verbose=False)
         with h5py.File(self.filepath(f"{tag}_{datetime_now()}", ext="hdf5"), "w") as f:
             dmcs_dataset = f.create_dataset("dmc", data=patterns)
             if self.save_full_frame:
                 f.create_dataset("pl_images", data=pl_readout)
             pl_intensities_dataset = f.create_dataset("pl_intensities", data=pl_intensities)
-            pl_intensities_dataset.attrs["exp_ms"] = self.wfs.exp_ms
-            pl_intensities_dataset.attrs["gain"] = self.wfs.gain
-            pl_intensities_dataset.attrs["nframes"] = self.wfs.nframes
-            pl_intensities_dataset.attrs["centroids_dt"] = self.wfs.centroids_dt
+            pl_intensities_dataset.attrs["exp_ms"] = self.camera.exp_ms
+            pl_intensities_dataset.attrs["gain"] = self.camera.gain
+            pl_intensities_dataset.attrs["nframes"] = self.camera.n_frames
+            pl_intensities_dataset.attrs["centroids_dt"] = self.reader.centroids_dt
 
         return pl_intensities
 
     def save_current_image(self, tag=""):
-        self.save(f"pl_image_{datetime_now()}_{tag}", self.wfs.get_image())
+        self.save(f"pl_image_{datetime_now()}_{tag}", self.camera.get_image())
 
     def make_interaction_matrix(self, nm, amp_calib=0.01, thres=1/30):
-        self.int_mat = np.zeros((self.wfs.Nports, nm))
+        self.int_mat = np.zeros((self.reader.Nports, nm))
         pushes = []
         pulls = []
         for i in trange(nm):
             self.dm.apply_mode(i + 1, amp_calib)
             sleep(0.1)
-            s_push = self.wfs.get_image()
+            s_push = self.camera.get_image()
             pushes.append(s_push)
             self.dm.apply_mode(i + 1, -amp_calib)
             sleep(0.1)
-            s_pull = self.wfs.get_image()
+            s_pull = self.camera.get_image()
             pulls.append(s_pull)
-            s = (self.wfs.get_intensities(s_push) - self.wfs.get_intensities(s_pull)) / (2 * amp_calib)
+            s = (self.reader.get_intensities(s_push) - self.reader.get_intensities(s_pull)) / (2 * amp_calib)
             self.int_mat[:,i] = s.ravel()
    
         self.cmd_mat = np.linalg.pinv(self.int_mat, thres)
@@ -107,9 +108,9 @@ class Experiments:
             pulls_dset = f.create_dataset("pull_frames", data=np.array(pulls))
             intmat_dset = f.create_dataset("intmat", data=self.int_mat)
             intmat_dset.attrs["amp_calib"] = amp_calib
-            intmat_dset.attrs["exp_ms"] = self.wfs.exp_ms
-            intmat_dset.attrs["gain"] = self.wfs.gain
-            intmat_dset.attrs["nframes"] = self.wfs.nframes
+            intmat_dset.attrs["exp_ms"] = self.camera.exp_ms
+            intmat_dset.attrs["gain"] = self.camera.gain
+            intmat_dset.attrs["nframes"] = self.camera.n_frames
             cmdmat_dset = f.create_dataset("cmdmat", data=self.cmd_mat)
             cmdmat_dset.attrs["thres"] = thres
    
@@ -127,8 +128,8 @@ class Experiments:
         if verbose:
             print(f"Initial error = {rms(self.dm.actuators)}")
         lantern_reading = np.zeros(self.dm.Nmodes)
-        lantern_image = self.wfs.get_image()
-        lr = self.cmd_mat @ (self.wfs.get_intensities(lantern_image) - self.pl_flat)
+        lantern_image = self.camera.get_image()
+        lr = self.cmd_mat @ (self.reader.get_intensities(lantern_image) - self.pl_flat)
         lantern_reading[:len(lr)] = lr
         # does the sign of measured WF errors match the actual signs?
         sign_match = ''.join(map(lambda x: str(int(x)), (np.sign(lantern_reading * self.dm.actuators) * 2 + 2)/4))
@@ -153,12 +154,12 @@ class Experiments:
            
         with h5py.File(self.filepath(f"closedloop_{datetime_now()}", ext="hdf5"), "w") as f:
             dmcs_dset = f.create_dataset("dmcs", data=np.array(dmcs))
-            dmcs_dset.attrs["exp_ms"] = self.wfs.exp_ms
-            dmcs_dset.attrs["gain"] = self.wfs.gain
-            dmcs_dset.attrs["centroids_timestamp"] = self.wfs.centroids_dt
+            dmcs_dset.attrs["exp_ms"] = self.camera.exp_ms
+            dmcs_dset.attrs["gain"] = self.camera.gain
+            dmcs_dset.attrs["centroids_timestamp"] = self.camera.centroids_dt
             dmcs_dset.attrs["cmd_timestamp"] = self.cmd_dt
             images_dset = f.create_dataset("lantern_images", data=np.array(lantern_images))
-            images_dset.attrs["spot_radius_px"] = self.wfs.spot_radius_px
+            images_dset.attrs["spot_radius_px"] = self.reader.spot_radius_px
             f.create_dataset("lantern_readings", data=np.array(lantern_readings))
 
         return dmcs, lantern_readings
@@ -196,8 +197,8 @@ class Experiments:
 
     def sweep_all_modes(self, min_amp=-1.0, max_amp=1.0, step=0.1):
         amps = np.arange(min_amp, max_amp+step, step)
-        patterns = np.zeros((len(amps) * self.Nmodes + 1, self.Nmodes))
-        for z in range(1, self.Nmodes+1):
+        patterns = np.zeros((len(amps) * self.dm.Nmodes + 1, self.dm.Nmodes))
+        for z in range(1, self.dm.Nmodes+1):
             patterns[len(amps)*(z-1):len(amps)*(z),z-1] = amps
         return amps, self.openloop_experiment(patterns, tag="sweep_all_modes")
 
@@ -208,7 +209,7 @@ class Experiments:
     def exptime_sweep(self, exp_ms_values, tag=""):
         sweep_values = []
         for exp_ms in exp_ms_values:
-            self.exp_ms = exp_ms
+            self.camera.exp_ms = exp_ms
             sweep_values.append(self.get_intensities(self.get_image()))
         
         sweep_values = np.array(sweep_values)
@@ -262,7 +263,7 @@ class Experiments:
         
     def focus_astig_cube_sweep(self):
         # NOT writing this to generalize to higher orders or further out because dear god no
-        patterns = np.zeros((13**3, self.Nmodes))
+        patterns = np.zeros((13**3, self.dm.Nmodes))
         amps_per_mode = np.arange(-0.06, 0.07, 0.01)
         for (i, pattern) in enumerate(product(amps_per_mode, amps_per_mode, amps_per_mode)):
             patterns[i,:3] = pattern

@@ -4,6 +4,7 @@ from abc import ABC
 from tqdm import trange
 import numpy as np
 import hcipy as hc
+import paramiko
 
 class ShaneDM:
     def __init__(self):
@@ -23,14 +24,14 @@ class ShaneDM:
     def __del__(self):
         self.client.close()
         
-    def apply_mode(self, z, amp, verbose=True):
+    def apply_mode(self, z, amp, verbose=False):
         assert isinstance(z, int), "first argument must be an integer (Zernike number)"
         assert isinstance(amp, float), "second argument must be a float (amplitude)"
         self.actuators[:] = 0.0
         self.actuators[z-1] = amp
         self.command_to_dm(verbose=verbose)
         
-    def command_to_dm(self, p, verbose=True):
+    def command_to_dm(self, p=None, verbose=False):
         """
         Send a command to the ShaneAO woofer.
 
@@ -38,7 +39,8 @@ class ShaneDM:
             amplitudes - list or np.ndarray
             The amplitude of each mode in [1, 2, ..., Nmodes], in order.
         """
-        self.actuators[:] = p[:]
+        if p is not None:
+            self.actuators[:] = p[:]
         assert len(self.actuators) == self.Nmodes, "wrong number of modes specified"
         assert np.all(np.abs(self.actuators) <= 1.0), "sending out-of-bounds amplitudes"
         command = ",".join(map(str, self.actuators))

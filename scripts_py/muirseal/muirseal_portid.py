@@ -10,4 +10,5 @@ lr.reconstruct_image(img, lr.get_intensities(img))
 plt.imshow(img)
 # %%
 plt.imshow(lr.reconstruct_image(img, lr.get_intensities(img)))
+
 # %%
